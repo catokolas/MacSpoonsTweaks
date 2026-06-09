@@ -1,0 +1,69 @@
+[
+  {
+    "name": "Caffeine",
+    "type": "Module",
+    "desc": "Replacement for the Caffeine app, prevents the screen from going to sleep.",
+    "doc":  "Replacement for the Caffeine app, prevents the screen from going to sleep.\n\nDownload: https://example",
+    "Method": [
+      { "name": "start", "signature": "Caffeine:start()" },
+      { "name": "stop",  "signature": "Caffeine:stop()" },
+      { "name": "toggle","signature": "Caffeine:toggle()" },
+      { "name": "setState", "signature": "Caffeine:setState(state)" }
+    ],
+    "Variable": [
+      {
+        "name": "show_notifications",
+        "signature": "Caffeine.show_notifications",
+        "desc": "If true, show notifications when state changes. Defaults to false."
+      }
+    ]
+  },
+  {
+    "name": "TinyBrowser",
+    "type": "Module",
+    "desc": "Tiny single-purpose web view.",
+    "doc":  "Tiny browser.",
+    "Method": [
+      { "name": "show", "signature": "TinyBrowser:show()" }
+    ],
+    "Variable": [
+      {
+        "name": "default_url",
+        "signature": "TinyBrowser.default_url",
+        "desc": "URL to load on launch. Defaults to \"https://example.com\"."
+      },
+      {
+        "name": "timeout_seconds",
+        "signature": "TinyBrowser.timeout_seconds",
+        "desc": "Page load timeout. Defaults to 30."
+      },
+      {
+        "name": "scale_factor",
+        "signature": "TinyBrowser.scale_factor",
+        "desc": "Default: 1.5"
+      },
+      {
+        "name": "custom_table",
+        "signature": "TinyBrowser.custom_table",
+        "desc": "Configuration table. Defaults to {1, 2, 3}."
+      },
+      {
+        "name": "undocumented",
+        "signature": "TinyBrowser.undocumented",
+        "desc": "No default mentioned in description."
+      }
+    ]
+  },
+  {
+    "name": "EventDriven",
+    "type": "Module",
+    "desc": "Spoon with no lifecycle methods.",
+    "Variable": [],
+    "Method": []
+  },
+  {
+    "name": "NotAModule",
+    "type": "Function",
+    "desc": "Should be filtered out."
+  }
+]
