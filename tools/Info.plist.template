@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+                      "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundlePackageType</key>          <string>APPL</string>
+  <key>CFBundleIdentifier</key>           <string>{{BUNDLE_ID}}</string>
+  <key>CFBundleName</key>                 <string>MacSpoonsTweaks</string>
+  <key>CFBundleDisplayName</key>          <string>MacSpoonsTweaks</string>
+  <key>CFBundleExecutable</key>           <string>MacSpoonsTweaks</string>
+  <key>CFBundleShortVersionString</key>   <string>{{VERSION}}</string>
+  <key>CFBundleVersion</key>              <string>{{BUILD}}</string>
+  <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
+
+  <key>LSMinimumSystemVersion</key>       <string>14.0</string>
+  <key>LSApplicationCategoryType</key>    <string>public.app-category.utilities</string>
+  <key>NSPrincipalClass</key>             <string>NSApplication</string>
+  <key>NSHighResolutionCapable</key>      <true/>
+
+  <!-- We're a regular foreground app, not a menu-bar agent.
+       Setting LSUIElement=true would hide us from Dock + Cmd-Tab. -->
+  <key>LSUIElement</key>                  <false/>
+
+  <!-- Single-line human-readable copyright shown in About panel. -->
+  <key>NSHumanReadableCopyright</key>
+  <string>© Cato Kolås. Released under the MIT License.</string>
+</dict>
+</plist>
