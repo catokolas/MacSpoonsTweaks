@@ -1,0 +1,22 @@
+.DS_Store
+.build/
+.swiftpm/
+Packages/
+*.xcodeproj/
+*.xcworkspace/
+*.swiftpm/
+
+# Release-build outputs from tools/build-app.sh
+build/
+
+# Secrets for the build script — never commit these.
+tools/.env
+
+# Per-user notes (not part of the project)
+PRIVATE_NOTES.md
+TODO.md
+
+# Editor / IDE
+.vscode/
+.idea/
+.claude/
