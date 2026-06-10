@@ -11,16 +11,56 @@ public struct AppState: Codable, Equatable, Sendable {
     public var catalogETags:     [String: String]
     public var spoons:           [String: SpoonState]
 
+    /// Installed companion native modules, keyed by `OptionalModule.name`
+    /// (e.g. `"hs._ckol.multitouch"`). Tracks the GitHub release tag
+    /// that's currently on disk so the catalog refresh can flag
+    /// "Update available". Defaults to `[:]` for state files written
+    /// before this field existed.
+    public var nativeModules:    [String: NativeModuleState]
+
     public init(
         schemaVersion: Int = 1,
         lastCatalogFetch: [String: Date] = [:],
         catalogETags:     [String: String] = [:],
-        spoons:           [String: SpoonState] = [:]
+        spoons:           [String: SpoonState] = [:],
+        nativeModules:    [String: NativeModuleState] = [:]
     ) {
         self.schemaVersion    = schemaVersion
         self.lastCatalogFetch = lastCatalogFetch
         self.catalogETags     = catalogETags
         self.spoons           = spoons
+        self.nativeModules    = nativeModules
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case schemaVersion, lastCatalogFetch, catalogETags, spoons
+        case nativeModules
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.schemaVersion    = try c.decode(Int.self, forKey: .schemaVersion)
+        self.lastCatalogFetch = try c.decode(
+            [String: Date].self, forKey: .lastCatalogFetch)
+        self.catalogETags     = try c.decode(
+            [String: String].self, forKey: .catalogETags)
+        self.spoons           = try c.decode(
+            [String: SpoonState].self, forKey: .spoons)
+        self.nativeModules    = try c.decodeIfPresent(
+            [String: NativeModuleState].self, forKey: .nativeModules) ?? [:]
+    }
+}
+
+/// One row of `AppState.nativeModules`. Records which release tag of a
+/// companion native module is currently installed at
+/// `~/.hammerspoon/<OptionalModule.installSubdir>`.
+public struct NativeModuleState: Codable, Equatable, Sendable {
+    public var installedVersion: String
+    public var installedAt:      Date
+
+    public init(installedVersion: String, installedAt: Date) {
+        self.installedVersion = installedVersion
+        self.installedAt      = installedAt
     }
 }
 
@@ -32,6 +72,13 @@ public struct SpoonState: Codable, Equatable, Sendable {
     /// `mac_spoons_tweaks.lua`. Always reflects user intent — never used
     /// to gate live applies (those go through the bridge directly).
     public var enabled: Bool
+
+    /// User has temporarily paused the Spoon. `enabled` stays true (the
+    /// Spoon remains in the snippet, configured, with its hotkeys bound),
+    /// but the snippet omits `start = true` so Hammerspoon reloads leave
+    /// it dormant. `SpoonOrchestrator.setPaused` flips this and drives
+    /// `:stop()` / `:start()` live.
+    public var paused: Bool
 
     /// What version of the Spoon is currently installed locally, or
     /// `nil` if not installed.
@@ -55,6 +102,7 @@ public struct SpoonState: Codable, Equatable, Sendable {
     public init(
         sourceID: String,
         enabled: Bool = false,
+        paused: Bool = false,
         installedRef: InstalledRef? = nil,
         installedSchemaKeys: [String]? = nil,
         config: [String: ConfigValue] = [:],
@@ -62,10 +110,33 @@ public struct SpoonState: Codable, Equatable, Sendable {
     ) {
         self.sourceID            = sourceID
         self.enabled             = enabled
+        self.paused              = paused
         self.installedRef        = installedRef
         self.installedSchemaKeys = installedSchemaKeys
         self.config              = config
         self.hotkeys             = hotkeys
+    }
+
+    // Custom decoder so `paused` defaults to false on pre-existing
+    // `state.json` files written before the field existed.
+    private enum CodingKeys: String, CodingKey {
+        case sourceID, enabled, paused, installedRef
+        case installedSchemaKeys, config, hotkeys
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.sourceID = try c.decode(String.self, forKey: .sourceID)
+        self.enabled  = try c.decode(Bool.self,   forKey: .enabled)
+        self.paused   = try c.decodeIfPresent(Bool.self, forKey: .paused) ?? false
+        self.installedRef = try c.decodeIfPresent(
+            InstalledRef.self, forKey: .installedRef)
+        self.installedSchemaKeys = try c.decodeIfPresent(
+            [String].self, forKey: .installedSchemaKeys)
+        self.config = try c.decode(
+            [String: ConfigValue].self, forKey: .config)
+        self.hotkeys = try c.decode(
+            [String: HotkeyBinding].self, forKey: .hotkeys)
     }
 }
 

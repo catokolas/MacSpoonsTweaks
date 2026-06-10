@@ -45,7 +45,12 @@ public extension CatokolasSource {
 public extension InstalledRef {
     /// Caller-friendly "should we show 'Update available'?" predicate.
     /// Both args nil → false; either nil → false (can't compare); equal
-    /// → false; different → true.
+    /// identity → false; different identity → true.
+    ///
+    /// `zipETag` carries a `fetchedAt: Date` purely for diagnostics —
+    /// it must NOT participate in the comparison or every refresh
+    /// would flag every upstream Spoon as "Update available" simply
+    /// because the latest probe ran later than the install probe.
     static func updateAvailable(
         installed: InstalledRef?,
         latest: InstalledRef?
@@ -53,6 +58,17 @@ public extension InstalledRef {
         guard let installed = installed, let latest = latest else {
             return false
         }
-        return installed != latest
+        return installed.identityValue != latest.identityValue
+    }
+
+    /// Stable identity of an `InstalledRef` for comparison purposes —
+    /// the git SHA or the ETag string, with the case as a prefix so
+    /// a SHA and an ETag with the same string aren't accidentally
+    /// considered equal.
+    var identityValue: String {
+        switch self {
+        case .gitCommit(let sha):    return "gitCommit:" + sha
+        case .zipETag(let value, _): return "zipETag:"   + value
+        }
     }
 }

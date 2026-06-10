@@ -46,7 +46,18 @@ public enum SnippetGenerator {
         out.append("-- To stop the app managing your Spoons, delete this file AND remove")
         out.append("-- the `require(\"mac_spoons_tweaks\")` line from init.lua.")
         out.append("")
+        // Open the Mach message port the `hs` CLI talks to. Without
+        // this, the app's bridge calls fail with "can't access
+        // Hammerspoon message port" — so apply/install can't push live
+        // changes until Hammerspoon is reloaded.
+        out.append("require(\"hs.ipc\")")
         out.append("hs.loadSpoon(\"SpoonInstall\")")
+        // SpoonInstall.spoon was deleted / never installed — bail with a
+        // clear hint instead of letting line N nil-index trap.
+        out.append("if not spoon.SpoonInstall then")
+        out.append("  hs.alert.show(\"MacSpoonsTweaks: SpoonInstall.spoon is missing — open the app to reinstall.\", 10)")
+        out.append("  return")
+        out.append("end")
         out.append("spoon.SpoonInstall.use_syncinstall = false")
         out.append("")
 
@@ -123,7 +134,10 @@ public enum SnippetGenerator {
             fields.append("  hotkeys = \(encodeHotkeys(state.hotkeys)),")
         }
 
-        if entry.lifecycle.hasStart {
+        // Omit `start = true` for paused Spoons. The `andUse` block
+        // still loads + configures + binds hotkeys so resuming is just
+        // an `:start()` call away; reload from cold leaves it dormant.
+        if entry.lifecycle.hasStart && !state.paused {
             fields.append("  start = true,")
         }
 

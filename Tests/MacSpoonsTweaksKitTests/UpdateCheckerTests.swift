@@ -285,4 +285,29 @@ struct UpdateCheckStrategyTests {
         #expect(InstalledRef.updateAvailable(
             installed: .gitCommit("a"), latest: .gitCommit("b")))
     }
+
+    @Test
+    func updateAvailableIgnoresZipETagFetchedAt() {
+        // fetchedAt is a diagnostic timestamp; identical ETag values
+        // probed at different times must NOT be flagged as an update.
+        let t1 = Date(timeIntervalSince1970: 1_000_000)
+        let t2 = Date(timeIntervalSince1970: 2_000_000)
+        #expect(!InstalledRef.updateAvailable(
+            installed: .zipETag(value: "abc", fetchedAt: t1),
+            latest:    .zipETag(value: "abc", fetchedAt: t2)))
+        #expect(InstalledRef.updateAvailable(
+            installed: .zipETag(value: "abc", fetchedAt: t1),
+            latest:    .zipETag(value: "def", fetchedAt: t1)))
+    }
+
+    @Test
+    func updateAvailableDistinguishesGitFromZipWithSameValue() {
+        // The case prefix in `identityValue` prevents a SHA and an
+        // ETag that happen to share a string from being treated as
+        // the same identity.
+        let date = Date(timeIntervalSince1970: 0)
+        #expect(InstalledRef.updateAvailable(
+            installed: .gitCommit("abc"),
+            latest:    .zipETag(value: "abc", fetchedAt: date)))
+    }
 }

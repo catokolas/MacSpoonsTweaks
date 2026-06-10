@@ -136,6 +136,36 @@ struct SpoonInstallerTests {
     }
 
     @Test
+    func installAcceptsOKAfterLoadExtensionLogLines() async throws {
+        // Real Hammerspoon stdout when the install script triggers a
+        // first-time load of hs.http / hs.json: multi-line, with the
+        // `ok` sentinel only on the final line.
+        let env = try makeEnv()
+        defer { cleanup(env) }
+        try plantSpoonInstall(env)
+        let destDir = env.spoonsDir.appendingPathComponent("X.spoon")
+        try FileManager.default.createDirectory(
+            at: destDir, withIntermediateDirectories: true)
+        try Data("-- planted".utf8).write(
+            to: destDir.appendingPathComponent("init.lua"))
+
+        let runner = ScriptedRunner(outputs: [
+            "-- Loading extension: http\n-- Loading extension: json\nok"
+        ])
+        let installer = SpoonInstaller(
+            bootstrap: env.bootstrap, runner: runner, store: env.store)
+
+        let fixedDate = Date(timeIntervalSince1970: 1_000_000)
+        try await installer.install(
+            entry: makeEntry(name: "X", sourceID: "default"),
+            from: .default,
+            installedRef: .zipETag(value: "etag", fetchedAt: fixedDate))
+        let state = try env.store.load()
+        #expect(state.spoons["X"]?.installedRef
+                == .zipETag(value: "etag", fetchedAt: fixedDate))
+    }
+
+    @Test
     func installThrowsWhenDestinationStillMissing() async throws {
         let env = try makeEnv()
         defer { cleanup(env) }
@@ -199,6 +229,40 @@ struct SpoonInstallerTests {
         try await installer.remove(name: "Absent")
         let state = try env.store.load()
         #expect(state.spoons["Absent"] == nil)
+    }
+
+    @Test
+    func installRefusesWhenDestinationIsADevSymlink() async throws {
+        // Dev workflow: ~/.hammerspoon/Spoons/<Name>.spoon is a symlink
+        // into the local contrib checkout. SpoonInstall's `unzip -o`
+        // can't extract over a symlinked target — pre-check refuses
+        // with a clear, actionable error instead.
+        let env = try makeEnv()
+        defer { cleanup(env) }
+        let realDir = env.root.appendingPathComponent("dev-checkout")
+        try FileManager.default.createDirectory(
+            at: realDir, withIntermediateDirectories: true)
+        let link = env.spoonsDir.appendingPathComponent("DevSpoon.spoon")
+        try FileManager.default.createSymbolicLink(
+            at: link, withDestinationURL: realDir)
+
+        let runner = ScriptedRunner(outputs: ["ok"])
+        let installer = SpoonInstaller(
+            bootstrap: env.bootstrap, runner: runner, store: env.store)
+
+        let entry = makeEntry(name: "DevSpoon", sourceID: "catokolas")
+        await #expect(throws: SpoonInstaller.InstallerError.self) {
+            try await installer.install(
+                entry: entry, from: .default,
+                installedRef: .gitCommit("abc"))
+        }
+        // Runner never invoked: the pre-check shortcircuits before
+        // bootstrap or the Lua script.
+        #expect(runner.scripts.isEmpty)
+        // Symlink untouched.
+        let stillLink = (try? link.resourceValues(
+            forKeys: [.isSymbolicLinkKey]))?.isSymbolicLink == true
+        #expect(stillLink)
     }
 
     // MARK: - Helpers

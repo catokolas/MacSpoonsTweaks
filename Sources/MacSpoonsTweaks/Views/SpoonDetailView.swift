@@ -45,6 +45,10 @@ struct SpoonDetailView: View {
                 header
                 installStateBar
                 provenanceNote
+                if !entry.optionalModules.isEmpty {
+                    Divider()
+                    OptionalModulesSection(modules: entry.optionalModules)
+                }
                 Divider()
                 configSection
                 if !entry.hotkeys.isEmpty {
@@ -77,7 +81,7 @@ struct SpoonDetailView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(entry.name).font(.largeTitle).fontWeight(.semibold)
+            Text(entry.name).font(.title2).fontWeight(.semibold)
             HStack(spacing: 6) {
                 Text("v\(entry.metadata.version)")
                     .font(.subheadline).foregroundStyle(.secondary)
@@ -326,6 +330,21 @@ struct SpoonDetailView: View {
                 }
                 .disabled(values.isEmpty && hotkeyOverrides.isEmpty
                           || applyState == .inFlight)
+                if catalog.isInstalled(entry)
+                    && entry.lifecycle.hasStart
+                    && entry.lifecycle.hasStop {
+                    let isPaused = catalog.isPaused(entry)
+                    Toggle("Active", isOn: Binding(
+                        get: { !isPaused },
+                        set: { active in
+                            Task { await togglePause(to: !active) }
+                        }))
+                    .toggleStyle(.switch)
+                    .disabled(applyState == .inFlight)
+                    .help(isPaused
+                          ? "Deactivated — Spoon stays in the snippet but isn’t running. Toggle on to call :start()."
+                          : "Active — Spoon is running. Toggle off to call :stop() and omit start = true from the snippet. Config and hotkeys are preserved.")
+                }
                 Spacer()
                 Button {
                     Task { await applyNow() }
@@ -338,7 +357,11 @@ struct SpoonDetailView: View {
                     }
                 }
                 .keyboardShortcut(.return, modifiers: .command)
-                .disabled(applyState == .inFlight)
+                .disabled(applyState == .inFlight
+                          || !catalog.isInstalled(entry))
+                .help(catalog.isInstalled(entry)
+                      ? "Save config + hotkeys, regenerate the snippet, and push live."
+                      : "Install the Spoon first — Apply pushes config to the running Hammerspoon, which needs the Spoon present.")
             }
         }
         .padding()
@@ -365,7 +388,7 @@ struct SpoonDetailView: View {
                 }
                 if let msg = applyMessage {
                     Text(msg).font(.caption2).foregroundStyle(.secondary)
-                        .lineLimit(2)
+                        .textSelection(.enabled)
                 }
             }
             .font(.caption)
@@ -375,6 +398,7 @@ struct SpoonDetailView: View {
                 Image(systemName: "xmark.circle.fill")
                     .foregroundStyle(.red)
                 Text(applyMessage ?? "Apply failed.")
+                    .textSelection(.enabled)
             }
             .font(.caption).foregroundStyle(.red)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -395,6 +419,23 @@ struct SpoonDetailView: View {
             // for conflicts so the sidebar chip and per-row warning
             // both reflect the new state.
             catalog.recomputeHotkeyConflicts()
+            if result.liveAppliedOK {
+                applyState = .appliedOK
+            } else {
+                applyState   = .appliedWithLiveErrors
+                applyMessage = result.liveApplyError
+            }
+        } catch {
+            applyState   = .failed
+            applyMessage = String(describing: error)
+        }
+    }
+
+    private func togglePause(to paused: Bool) async {
+        applyState = .inFlight
+        applyMessage = nil
+        do {
+            let result = try await catalog.setPaused(entry, paused)
             if result.liveAppliedOK {
                 applyState = .appliedOK
             } else {

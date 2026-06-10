@@ -1,18 +1,50 @@
 import SwiftUI
+import AppKit
 import MacSpoonsTweaksKit
 
 @main
 struct MacSpoonsTweaksApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var catalog = SpoonCatalogModel()
 
     var body: some Scene {
-        WindowGroup("Spoons") {
+        // Single-window scene (Window, not WindowGroup) so the menu
+        // bar's `openWindow(id:)` focuses the existing window instead
+        // of spawning a duplicate.
+        Window("MacSpoonsTweaks", id: "main") {
             ContentView()
                 .environmentObject(catalog)
                 .luaRunner(catalog.runner)
+                // Bump the dynamic type one notch from the macOS
+                // default .large. Propagates through every Text/Label/
+                // Button so we don't have to tweak each `.font(...)`.
+                // Going higher makes `.largeTitle` (e.g. the Spoon
+                // detail header) disproportionately large.
+                .environment(\.dynamicTypeSize, .xLarge)
+                .task { await catalog.bootstrapSpoonInstall() }
                 .task { await catalog.refreshIfNeeded() }
         }
         .windowResizability(.contentSize)
+
+        MenuBarExtra {
+            MenuBarContent()
+                .environmentObject(catalog)
+        } label: {
+            // Filled variant + explicit weight/size for a heavier
+            // presence in the menu bar. The system caps the rendered
+            // height, but bold + filled reads stronger than the
+            // default thin outline.
+            Image(systemName: "puzzlepiece.extension.fill")
+                .font(.system(size: 18, weight: .bold))
+        }
+        .menuBarExtraStyle(.menu)
+        .commands {
+            CommandGroup(replacing: .appInfo) {
+                Button("About MacSpoonsTweaks") {
+                    AboutPanel.show()
+                }
+            }
+        }
     }
 }
 
@@ -64,7 +96,8 @@ final class SpoonCatalogModel: ObservableObject {
     @Published var recentInvocations: [BridgeInvocation] = []
 
     let orchestrator: SpoonOrchestrator
-    let installer:    SpoonInstaller
+    let installer:        SpoonInstaller
+    let moduleInstaller:  NativeModuleInstaller
     let initLuaPatcher: InitLuaPatcher
     let updateChecker:  any UpdateChecker
 
@@ -158,6 +191,9 @@ final class SpoonCatalogModel: ObservableObject {
             bootstrap: bootstrap,
             runner:    runner,
             store:     stateStore)
+
+        self.moduleInstaller = NativeModuleInstaller(
+            status: status, store: stateStore)
 
         self.initLuaPatcher = InitLuaPatcher(status: status)
 
@@ -268,6 +304,85 @@ final class SpoonCatalogModel: ObservableObject {
         installSeq += 1
         recomputeHotkeyConflicts()
         scanUnmanagedSpoons()
+    }
+
+    // MARK: - Optional native modules
+
+    /// Latest known release tag per module name. Refreshed lazily when
+    /// the detail view appears via `refreshModuleLatestTag(_:)`. Empty
+    /// when we haven't probed yet or the API call failed.
+    @Published private(set) var moduleLatestTags: [String: String] = [:]
+
+    /// Aggregated status the detail view binds to. Computed cheaply
+    /// (FS check + dictionary lookup); SwiftUI re-evaluates whenever
+    /// `installSeq` or `moduleLatestTags` changes.
+    func moduleStatus(_ m: OptionalModule) -> NativeModuleStatus {
+        _ = installSeq
+        let state = (try? stateStore.load()) ?? AppState()
+        let installed = moduleInstaller.isInstalled(m)
+        let installedTag = state.nativeModules[m.name]?.installedVersion
+        let latest = moduleLatestTags[m.name]
+        return NativeModuleStatus(
+            installed:        installed,
+            installedTag:     installed ? installedTag : nil,
+            latestTag:        latest)
+    }
+
+    /// Best-effort GitHub HEAD probe to populate `moduleLatestTags`.
+    /// Swallows errors — the UI just won't show "Update available" if
+    /// the network is down.
+    func refreshModuleLatestTag(_ m: OptionalModule) async {
+        if let tag = await moduleInstaller.latestTag(for: m) {
+            moduleLatestTags[m.name] = tag
+        }
+    }
+
+    func installModule(_ m: OptionalModule) async throws {
+        _ = try await moduleInstaller.install(module: m)
+        installSeq += 1
+    }
+
+    func removeModule(_ m: OptionalModule) throws {
+        try moduleInstaller.remove(module: m)
+        installSeq += 1
+    }
+
+    // MARK: - Pause / Resume
+
+    /// Reads `paused` off state.json. Bound to `installSeq` so SwiftUI
+    /// observers re-render whenever pause/install/remove changes land.
+    func isPaused(_ entry: SpoonCatalogEntry) -> Bool {
+        _ = installSeq
+        let state = (try? stateStore.load()) ?? AppState()
+        return state.spoons[entry.name]?.paused ?? false
+    }
+
+    /// Toggle pause and refresh observers. Returns the orchestrator's
+    /// `ApplyResult` so callers can surface live errors.
+    @discardableResult
+    func setPaused(
+        _ entry: SpoonCatalogEntry, _ paused: Bool
+    ) async throws -> SpoonOrchestrator.ApplyResult {
+        let result = try await orchestrator.setPaused(
+            entry: entry, paused: paused)
+        installSeq += 1
+        recomputeHotkeyConflicts()
+        return result
+    }
+
+    /// Spoons the user can pause: installed, enabled, with both `:start`
+    /// and `:stop` methods. Sorted by name for stable menu order.
+    func pausableEnabledSpoons() -> [SpoonCatalogEntry] {
+        _ = installSeq
+        let state = (try? stateStore.load()) ?? AppState()
+        return entries
+            .filter { entry in
+                guard entry.lifecycle.hasStart, entry.lifecycle.hasStop
+                else { return false }
+                guard let s = state.spoons[entry.name] else { return false }
+                return s.enabled && s.installedRef != nil
+            }
+            .sorted { $0.name.localizedCompare($1.name) == .orderedAscending }
     }
 
     // MARK: - Catalog drift
@@ -429,6 +544,14 @@ final class SpoonCatalogModel: ObservableObject {
         await refresh()
     }
 
+    /// Idempotent — returns immediately if SpoonInstall.spoon is already
+    /// in `~/.hammerspoon/Spoons/`. Otherwise fetches it. Best-effort:
+    /// network failures are swallowed; the snippet's defensive check
+    /// surfaces a clear error to the user at next Hammerspoon load.
+    func bootstrapSpoonInstall() async {
+        try? await installer.bootstrap.ensureInstalled()
+    }
+
     func refresh() async {
         loadState = .loading
         lastError = nil
@@ -444,7 +567,11 @@ final class SpoonCatalogModel: ObservableObject {
             let theirs = OverrideApplier.apply(
                 entries: theirsRaw, overrides: overrides)
 
-            let combined = (ours + theirs)
+            // Catokolas wins on name collisions — we publish a couple of
+            // Spoons (e.g. MoveSpaces) that also exist upstream, and the
+            // catalog dictionary later keys by name.
+            let oursNames = Set(ours.map { $0.name })
+            let combined = (ours + theirs.filter { !oursNames.contains($0.name) })
                 .sorted {
                     $0.name.localizedCompare($1.name) == .orderedAscending
                 }

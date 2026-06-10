@@ -9,9 +9,15 @@ public enum HammerspoonScript {
 
     // MARK: Lifecycle
 
-    /// `hs.loadSpoon("X")`. Idempotent on the Hammerspoon side.
+    /// `if not spoon.X then hs.loadSpoon("X") end` — truly idempotent.
+    /// `hs.loadSpoon` itself re-executes the Spoon's `init.lua` even
+    /// when already loaded, wiping any state the Spoon holds in upvalues
+    /// (event taps, watchers, native bridge handles). For event-driven
+    /// Spoons this corrupts the still-running instance and can take
+    /// Hammerspoon down on the next `:stop()`/`:start()` cycle.
     public static func loadSpoon(_ name: String) -> String {
-        return "hs.loadSpoon(\(LuaLiteral.encodeString(name)))"
+        let n = LuaLiteral.encodeString(name)
+        return "if not spoon.\(name) then hs.loadSpoon(\(n)) end"
     }
 
     public static func startSpoon(_ name: String) -> String {

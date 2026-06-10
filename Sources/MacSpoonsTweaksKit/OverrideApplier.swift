@@ -50,10 +50,11 @@ public enum OverrideApplier {
             // Override REPLACES (not merges). The override author owns
             // the schema for this Spoon; merging would mix inferred
             // garbage back into a curated tree.
-            lifecycle:  override.lifecycle,
-            config:     override.config,
-            hotkeys:    override.hotkeys,
-            provenance: .override(of: entry.sourceID))
+            lifecycle:        override.lifecycle,
+            config:           override.config,
+            hotkeys:          override.hotkeys,
+            optionalModules:  override.optionalModules,
+            provenance:       .override(of: entry.sourceID))
     }
 
     private static func pickNonEmpty(_ a: String, _ b: String) -> String {

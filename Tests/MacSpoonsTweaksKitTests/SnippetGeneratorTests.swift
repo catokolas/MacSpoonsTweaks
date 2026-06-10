@@ -200,6 +200,34 @@ struct SnippetGeneratorTests {
     }
 
     @Test
+    func pausedSpoonOmitsStartTrue() {
+        // hasStart=true + paused=true → andUse block still emitted (so
+        // config / hotkeys / load survive a reload), but no `start = true`.
+        let e = entry(
+            "FocusFollowsMouse",
+            hasConfigure: true, hasStart: true,
+            hotkeyActions: ["toggle"])
+        var state = AppState()
+        state.spoons["FocusFollowsMouse"] = SpoonState(
+            sourceID: "catokolas",
+            enabled:  true,
+            paused:   true,
+            installedRef: .gitCommit("abc"),
+            config:   ["delay": .number(0.05)],
+            hotkeys:  ["toggle":
+                HotkeyBinding(mods: ["ctrl","cmd"], key: "f")])
+        let snippet = SnippetGenerator.generate(
+            state: state,
+            catalog: ["FocusFollowsMouse": e],
+            repos: ["catokolas": catokolasRepo],
+            timestamp: fixedDate)
+        #expect(snippet.contains(":andUse(\"FocusFollowsMouse\""))
+        #expect(snippet.contains(":configure({"))
+        #expect(snippet.contains("hotkeys = { toggle = "))
+        #expect(!snippet.contains("start = true"))
+    }
+
+    @Test
     func emptyConfigAndHotkeysProducesMinimalBlock() {
         // A user could enable a Spoon, install it, but leave defaults.
         let entry = entry(

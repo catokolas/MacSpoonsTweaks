@@ -100,10 +100,11 @@ public final class CatokolasSource: CatalogSource, @unchecked Sendable {
                     homepage:    manifest.homepage,
                     license:     manifest.license
                 ),
-                lifecycle:  manifest.lifecycle,
-                config:     manifest.config,
-                hotkeys:    manifest.hotkeys,
-                provenance: .manifest
+                lifecycle:       manifest.lifecycle,
+                config:          manifest.config,
+                hotkeys:         manifest.hotkeys,
+                optionalModules: manifest.optionalModules,
+                provenance:      .manifest
             )
         }
     }

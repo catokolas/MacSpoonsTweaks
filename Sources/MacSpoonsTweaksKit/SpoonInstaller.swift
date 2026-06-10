@@ -35,6 +35,11 @@ public final class SpoonInstaller: @unchecked Sendable {
         /// expected `.spoon` directory didn't materialize. Indicates a
         /// SpoonInstall bug or a corrupted upstream artifact.
         case destinationMissingAfterInstall(URL)
+        /// Destination is a symlink. SpoonInstall's `unzip -o` refuses
+        /// to extract over a symlinked target dir; even if it didn't,
+        /// silently overwriting an in-tree dev checkout would be the
+        /// wrong default.
+        case destinationIsSymlink(URL, target: URL)
 
         public var description: String {
             switch self {
@@ -42,6 +47,10 @@ public final class SpoonInstaller: @unchecked Sendable {
                 return "SpoonInstall failed: \(out)"
             case .destinationMissingAfterInstall(let url):
                 return "Install reported success but \(url.path) is missing"
+            case .destinationIsSymlink(let path, let target):
+                return "\(path.lastPathComponent) is a symlink to "
+                    + "\(target.path). Remove the symlink first if you "
+                    + "want a managed copy installed."
             }
         }
     }
@@ -58,14 +67,26 @@ public final class SpoonInstaller: @unchecked Sendable {
         from repo: RepoRef,
         installedRef: InstalledRef
     ) async throws {
+        let destination = spoonsDir
+            .appendingPathComponent(entry.name + ".spoon")
+        if let symlinkTarget = symlinkTarget(of: destination) {
+            throw InstallerError.destinationIsSymlink(
+                destination, target: symlinkTarget)
+        }
         try await bootstrap.ensureInstalled()
         let script = SpoonInstallScript.install(name: entry.name, repo: repo)
         let result = try await runner.runLua(script, timeout: 30)
-        guard result == "ok" else {
+        // hs.loadSpoon / updateRepo print `-- Loading extension: …` log
+        // lines to stdout BEFORE the script's return value lands, so
+        // strict equality against `"ok"` rejects every real install. The
+        // sentinel is the last non-empty line — match against that.
+        let lastLine = result
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .last { !$0.isEmpty } ?? ""
+        guard lastLine == "ok" else {
             throw InstallerError.spoonInstallReportedFailure(stdout: result)
         }
-        let destination = spoonsDir
-            .appendingPathComponent(entry.name + ".spoon")
         guard FileManager.default.fileExists(atPath: destination.path) else {
             throw InstallerError.destinationMissingAfterInstall(destination)
         }
@@ -81,6 +102,24 @@ public final class SpoonInstaller: @unchecked Sendable {
                 config:             existing?.config  ?? [:],
                 hotkeys:            existing?.hotkeys ?? [:])
         }
+    }
+
+    /// Returns the resolved target if `url` is a symlink (whether or
+    /// not the target exists); nil otherwise. Used to detect dev-style
+    /// symlinks in `~/.hammerspoon/Spoons/` before SpoonInstall's
+    /// `unzip -o` would fail with "cannot enter ... Permission denied".
+    private func symlinkTarget(of url: URL) -> URL? {
+        let values = try? url.resourceValues(forKeys: [.isSymbolicLinkKey])
+        guard values?.isSymbolicLink == true else { return nil }
+        let dest = try? FileManager.default
+            .destinationOfSymbolicLink(atPath: url.path)
+        guard let dest = dest else { return url.resolvingSymlinksInPath() }
+        if dest.hasPrefix("/") {
+            return URL(fileURLWithPath: dest)
+        }
+        return url.deletingLastPathComponent()
+            .appendingPathComponent(dest)
+            .standardizedFileURL
     }
 
     /// Stop, unload, delete the Spoon, and clear it from `state.spoons`.

@@ -48,6 +48,47 @@ Open `Package.swift` in Xcode and press Run. (`swift run MacSpoonsTweaks`
 from CLI works but Mac-app affordances — menu bar, dock activation —
 come up cleaner from Xcode.)
 
+1. Xcode (recommended for development)
+
+  cd ~/git/MacSpoonsTweaks
+  open Package.swift
+
+  Xcode opens, treats the package as a project. Top toolbar:
+  - Scheme selector → MacSpoonsTweaks
+  - Build target → My Mac
+
+  Then ⌘R. App launches, you get incremental rebuilds, the SwiftUI canvas works in any
+   view file, breakpoints work.
+
+  This is the only setup where SwiftUI previews work — pop open SpoonDetailView.swift
+  and click "Resume" in the canvas to live-preview the detail panel without launching
+  the app.
+
+  2. swift run from CLI (quick smoke test)
+
+  cd ~/git/MacSpoonsTweaks
+  DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift run -c release MacSpoonsTweaks
+
+  Launches the app from Terminal. Works, but it runs as a Terminal subprocess: no
+  proper Dock icon, no Cmd-Tab presence, no menu bar. Fine for "does it crash on
+  launch?" sanity checks. Ctrl-C in Terminal quits it.
+
+  The DEVELOPER_DIR prefix is the same SDK detail the README documents —
+  CommandLineTools doesn't ship SwiftUI for this kind of build.
+
+  3. Build a real .app bundle
+
+  cd ~/git/MacSpoonsTweaks
+  ./tools/build-app.sh        # default: ad-hoc signed
+  open build/MacSpoonsTweaks.app
+
+  Produces a proper Mac app under build/ that behaves like any other app — Dock icon,
+  menu bar, Cmd-Tab, the works. First double-click may show a Gatekeeper "unidentified
+   developer" dialog because of ad-hoc signing; right-click the app → Open → Open
+  clears it and macOS remembers.
+
+  This is what you'd hand to a friend.
+
 The app fetches `https://raw.githubusercontent.com/catokolas/HS_SpoonsContrib/main/spoons.json`
 on launch and lists the six Spoons in the sidebar. Selecting one shows
 a stub detail panel listing the schema. The full config UI, hotkey

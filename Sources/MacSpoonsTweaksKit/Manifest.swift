@@ -29,7 +29,59 @@ public struct SpoonManifest: Decodable, Identifiable, Sendable {
     public var config:    [ConfigField]
     public var hotkeys:   [HotkeyAction]
 
+    /// Companion native modules this Spoon opportunistically uses.
+    /// Empty if the Spoon doesn't depend on any. Defaults to `[]` for
+    /// manifests written before the field existed.
+    public var optionalModules: [OptionalModule]
+
     public var id: String { name }
+
+    public init(
+        schemaVersion: Int,
+        name: String,
+        version: String,
+        description: String? = nil,
+        author: String? = nil,
+        homepage: String? = nil,
+        license: String? = nil,
+        lifecycle: Lifecycle,
+        config:  [ConfigField] = [],
+        hotkeys: [HotkeyAction] = [],
+        optionalModules: [OptionalModule] = []
+    ) {
+        self.schemaVersion   = schemaVersion
+        self.name            = name
+        self.version         = version
+        self.description     = description
+        self.author          = author
+        self.homepage        = homepage
+        self.license         = license
+        self.lifecycle       = lifecycle
+        self.config          = config
+        self.hotkeys         = hotkeys
+        self.optionalModules = optionalModules
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case schemaVersion, name, version, description, author, homepage
+        case license, lifecycle, config, hotkeys, optionalModules
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.schemaVersion = try c.decode(Int.self, forKey: .schemaVersion)
+        self.name        = try c.decode(String.self, forKey: .name)
+        self.version     = try c.decode(String.self, forKey: .version)
+        self.description = try c.decodeIfPresent(String.self, forKey: .description)
+        self.author      = try c.decodeIfPresent(String.self, forKey: .author)
+        self.homepage    = try c.decodeIfPresent(String.self, forKey: .homepage)
+        self.license     = try c.decodeIfPresent(String.self, forKey: .license)
+        self.lifecycle   = try c.decode(Lifecycle.self, forKey: .lifecycle)
+        self.config      = try c.decode([ConfigField].self, forKey: .config)
+        self.hotkeys     = try c.decode([HotkeyAction].self, forKey: .hotkeys)
+        self.optionalModules = try c.decodeIfPresent(
+            [OptionalModule].self, forKey: .optionalModules) ?? []
+    }
 }
 
 public struct Lifecycle: Decodable, Sendable {

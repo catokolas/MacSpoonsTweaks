@@ -134,6 +134,63 @@ struct StateStoreTests {
         #expect(alphaIdx < zebraIdx)
     }
 
+    @Test
+    func loadingPreviousStateDefaultsPausedToFalse() throws {
+        // State files written before the `paused` field existed must
+        // still decode cleanly — paused defaults to false.
+        let path = tmpPath()
+        let json = """
+        {
+          "schemaVersion": 1,
+          "lastCatalogFetch": {},
+          "catalogETags": {},
+          "spoons": {
+            "Old": {
+              "sourceID": "catokolas",
+              "enabled": true,
+              "config": {},
+              "hotkeys": {}
+            }
+          }
+        }
+        """
+        try json.write(to: path, atomically: true, encoding: .utf8)
+        let store = StateStore(path: path)
+        let state = try store.load()
+        #expect(state.spoons["Old"]?.enabled == true)
+        #expect(state.spoons["Old"]?.paused == false)
+    }
+
+    @Test
+    func nativeModulesRoundTripsAndDefaultsToEmpty() throws {
+        // Legacy state.json without nativeModules → empty map; new
+        // state with entries → round-trips back as written.
+        let pathOld = tmpPath()
+        try """
+        {
+          "schemaVersion": 1,
+          "lastCatalogFetch": {},
+          "catalogETags": {},
+          "spoons": {}
+        }
+        """.write(to: pathOld, atomically: true, encoding: .utf8)
+        let oldState = try StateStore(path: pathOld).load()
+        #expect(oldState.nativeModules.isEmpty)
+
+        let pathNew = tmpPath()
+        let store = StateStore(path: pathNew)
+        let fixed = Date(timeIntervalSince1970: 1_000_000)
+        try store.save(AppState(nativeModules: [
+            "hs._ckol.multitouch":
+                NativeModuleState(installedVersion: "v0.1", installedAt: fixed)
+        ]))
+        let reloaded = try store.load()
+        #expect(reloaded.nativeModules["hs._ckol.multitouch"]?
+                .installedVersion == "v0.1")
+        #expect(reloaded.nativeModules["hs._ckol.multitouch"]?
+                .installedAt == fixed)
+    }
+
     // MARK: helpers
 
     private func tmpPath() -> URL {

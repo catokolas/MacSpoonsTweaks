@@ -51,7 +51,7 @@ fi
 
 # Defaults.
 BUNDLE_ID="${BUNDLE_ID:-dev.local.MacSpoonsTweaks}"
-VERSION="${VERSION:-$(git describe --tags --abbrev=0 2>/dev/null || echo "0.0.0")}"
+VERSION="${VERSION:-$(git describe --tags --abbrev=0 2>/dev/null || echo "0.1.0")}"
 VERSION="${VERSION#v}"   # strip leading "v" if the tag is e.g. v0.1.0
 BUILD="${BUILD:-$(git rev-list --count HEAD 2>/dev/null || echo 1)}"
 CODESIGN_IDENTITY="${CODESIGN_IDENTITY:-}"

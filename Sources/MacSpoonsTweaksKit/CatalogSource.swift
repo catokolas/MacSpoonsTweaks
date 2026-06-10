@@ -11,6 +11,11 @@ public struct SpoonCatalogEntry: Identifiable, Sendable {
     public var lifecycle: Lifecycle
     public var config:    [ConfigField]
     public var hotkeys:   [HotkeyAction]
+    /// Companion native modules this Spoon opportunistically uses.
+    /// Empty unless the manifest declared `optionalModules`. Surfaced
+    /// in the detail view so the user can install / update them via
+    /// the `NativeModuleInstaller`.
+    public var optionalModules: [OptionalModule] = []
     public var provenance: ConfigProvenance
 }
 

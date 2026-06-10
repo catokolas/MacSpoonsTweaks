@@ -141,6 +141,33 @@ public final class SpoonOrchestrator: @unchecked Sendable {
         var liveOK    = true
         var liveError: String? = nil
 
+        // Ensure the Spoon is loaded before configuring or starting
+        // it. First-time Apply between Install and Hammerspoon reload
+        // otherwise fails with `attempt to index nil value (field 'X')`.
+        // hs.loadSpoon is idempotent so this is cheap on subsequent
+        // applies.
+        let hasLiveWork = !values.isEmpty
+            || !hotkeyOverrides.isEmpty
+            || entry.lifecycle.hasStart
+        if hasLiveWork {
+            do {
+                _ = try await runner.runLua(
+                    HammerspoonScript.loadSpoon(entry.name), timeout: 5)
+            } catch {
+                liveOK    = false
+                liveError = String(describing: error)
+            }
+        }
+
+        // Stop BEFORE re-configuring so a re-Apply with new config
+        // doesn't leave the previous instance's event taps registered
+        // alongside the new ones. Best-effort: if the Spoon was never
+        // started (first Apply), `:stop()` may no-op or fail; we
+        // proceed regardless.
+        if entry.lifecycle.hasStart && entry.lifecycle.hasStop {
+            _ = try? await runner.stopSpoon(entry.name)
+        }
+
         if !values.isEmpty {
             do {
                 try await runner.configure(
@@ -149,7 +176,9 @@ public final class SpoonOrchestrator: @unchecked Sendable {
                     hasConfigure: entry.lifecycle.hasConfigure)
             } catch {
                 liveOK    = false
-                liveError = String(describing: error)
+                liveError = [liveError, String(describing: error)]
+                    .compactMap { $0 }
+                    .joined(separator: " | ")
             }
         }
 
@@ -164,6 +193,110 @@ public final class SpoonOrchestrator: @unchecked Sendable {
                 liveError = [liveError, String(describing: error)]
                     .compactMap { $0 }
                     .joined(separator: " | ")
+            }
+        }
+
+        // Mirror the snippet's `start = true` so an event-driven
+        // Spoon (Spotify watcher, FocusFollowsMouse, etc.) actually
+        // takes effect on Apply without needing a Hammerspoon reload.
+        if entry.lifecycle.hasStart {
+            do {
+                try await runner.startSpoon(entry.name)
+            } catch {
+                liveOK    = false
+                liveError = [liveError, String(describing: error)]
+                    .compactMap { $0 }
+                    .joined(separator: " | ")
+            }
+        }
+
+        return ApplyResult(
+            snippetPath:    snippetPath,
+            liveAppliedOK:  liveOK,
+            liveApplyError: liveError)
+    }
+
+    // MARK: - Pause / Resume
+
+    /// Toggle a Spoon's `paused` flag. Same three-step shape as `apply`
+    /// (persist → regenerate snippet → push live) so views can reuse
+    /// the same status plumbing. Live step calls `:stop()` (pausing) or
+    /// loadSpoon→`:start()` (resuming); the snippet still keeps the
+    /// `:andUse` block so config / hotkeys / load survive a reload.
+    @discardableResult
+    public func setPaused(
+        entry: SpoonCatalogEntry,
+        paused: Bool
+    ) async throws -> ApplyResult {
+
+        // 1. Persist.
+        do {
+            try store.update { state in
+                guard var s = state.spoons[entry.name] else {
+                    // Pause request for a Spoon we have no state for —
+                    // create a stub so the flag survives. enabled stays
+                    // false; the caller is responsible for enabling.
+                    state.spoons[entry.name] = SpoonState(
+                        sourceID: entry.sourceID,
+                        enabled:  false,
+                        paused:   paused)
+                    return
+                }
+                s.paused = paused
+                state.spoons[entry.name] = s
+            }
+        } catch {
+            throw ApplyError.persistFailed(error)
+        }
+
+        // 2. Regenerate the managed snippet.
+        do {
+            let state = try store.load()
+            let snippet = SnippetGenerator.generate(
+                state:     state,
+                catalog:   catalogProvider(),
+                repos:     reposProvider(),
+                timestamp: clock())
+            try writeSnippet(snippet)
+        } catch {
+            throw ApplyError.snippetWriteFailed(error)
+        }
+
+        // 3. Push live. Best-effort — failures surface in ApplyResult.
+        var liveOK    = true
+        var liveError: String? = nil
+
+        if paused {
+            // Stop the running instance. No need to loadSpoon first —
+            // if it isn't loaded, there's nothing to stop, and `:stop()`
+            // on a nil reference is benign-or-errors; we swallow the
+            // error and report it.
+            if entry.lifecycle.hasStop {
+                do {
+                    try await runner.stopSpoon(entry.name)
+                } catch {
+                    liveOK    = false
+                    liveError = String(describing: error)
+                }
+            }
+        } else {
+            // Resume: mirror the apply path's loadSpoon → start.
+            do {
+                _ = try await runner.runLua(
+                    HammerspoonScript.loadSpoon(entry.name), timeout: 5)
+            } catch {
+                liveOK    = false
+                liveError = String(describing: error)
+            }
+            if entry.lifecycle.hasStart {
+                do {
+                    try await runner.startSpoon(entry.name)
+                } catch {
+                    liveOK    = false
+                    liveError = [liveError, String(describing: error)]
+                        .compactMap { $0 }
+                        .joined(separator: " | ")
+                }
             }
         }
 

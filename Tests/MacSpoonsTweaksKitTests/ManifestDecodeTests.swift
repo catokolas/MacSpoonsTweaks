@@ -169,6 +169,74 @@ struct ManifestDecodeTests {
         #expect(plainDecoded == plain)
     }
 
+    @Test
+    func optionalModulesDecodesFields() throws {
+        let json = """
+        {
+          "schemaVersion": 1, "name": "X", "version": "0.1",
+          "lifecycle": {
+            "hasStart": false, "hasStop": false, "hasToggle": false,
+            "hasConfigure": false, "eventDriven": false
+          },
+          "config": [],
+          "hotkeys": [],
+          "optionalModules": [
+            {
+              "name": "hs._ckol.foo",
+              "repo": "catokolas/HS_ModulesContrib-foo",
+              "installSubdir": "hs/_ckol/foo",
+              "assetPattern": "foo-*-macos-universal.zip",
+              "description": "blurb"
+            }
+          ]
+        }
+        """
+        let m = try JSONDecoder().decode(
+            SpoonManifest.self, from: Data(json.utf8))
+        #expect(m.optionalModules.count == 1)
+        let mod = m.optionalModules[0]
+        #expect(mod.name == "hs._ckol.foo")
+        #expect(mod.repo == "catokolas/HS_ModulesContrib-foo")
+        #expect(mod.installSubdir == "hs/_ckol/foo")
+        #expect(mod.assetPattern == "foo-*-macos-universal.zip")
+        #expect(mod.description == "blurb")
+    }
+
+    @Test
+    func manifestWithoutOptionalModulesFieldDecodesAsEmpty() throws {
+        // Pre-existing manifests don't carry the field. Decoding must
+        // default it to [] rather than throw.
+        let json = """
+        {
+          "schemaVersion": 1, "name": "X", "version": "0.1",
+          "lifecycle": {
+            "hasStart": false, "hasStop": false, "hasToggle": false,
+            "hasConfigure": false, "eventDriven": false
+          },
+          "config": [], "hotkeys": []
+        }
+        """
+        let m = try JSONDecoder().decode(
+            SpoonManifest.self, from: Data(json.utf8))
+        #expect(m.optionalModules.isEmpty)
+    }
+
+    @Test
+    func assetPatternGlobMatchesUniversalZip() {
+        #expect(matchAssetPattern(
+            "multitouch-*-macos-universal.zip",
+            against: "multitouch-0.1-macos-universal.zip"))
+        #expect(matchAssetPattern(
+            "multitouch-*-macos-universal.zip",
+            against: "multitouch-1.10.2-macos-universal.zip"))
+        #expect(!matchAssetPattern(
+            "multitouch-*-macos-universal.zip",
+            against: "sloppyfocus-0.1-macos-universal.zip"))
+        #expect(!matchAssetPattern(
+            "multitouch-*-macos-universal.zip",
+            against: "multitouch-0.1-macos-universal.tar.gz"))
+    }
+
     // MARK: helpers
 
     private func decodeFixture() throws -> SpoonsCatalog {

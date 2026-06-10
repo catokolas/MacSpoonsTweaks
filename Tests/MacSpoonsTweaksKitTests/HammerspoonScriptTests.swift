@@ -9,8 +9,11 @@ struct HammerspoonScriptTests {
 
     @Test
     func loadSpoon() {
+        // Guarded so we don't re-execute init.lua and wipe a Spoon
+        // instance that's already loaded and holding event-tap state.
         #expect(HammerspoonScript.loadSpoon("FocusFollowsMouse")
-                == "hs.loadSpoon(\"FocusFollowsMouse\")")
+                == "if not spoon.FocusFollowsMouse then "
+                + "hs.loadSpoon(\"FocusFollowsMouse\") end")
     }
 
     @Test

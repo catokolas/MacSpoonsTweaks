@@ -46,12 +46,21 @@ struct SpoonOrchestratorTests {
         #expect(snippet.contains("hotkeys = { toggle = "))
 
         // (3) Live apply ran in the right order.
-        // configure → bindHotkeys (per orchestrator impl).
-        #expect(runner.scripts.count == 2)
+        // loadSpoon → stop → configure → bindHotkeys → start.
+        // loadSpoon makes first-time Apply work between Install and a
+        // Hammerspoon reload; stop+start mirrors the snippet's
+        // `start = true` so an event-driven Spoon actually takes
+        // effect on Apply without needing a reload.
+        #expect(runner.scripts.count == 5)
         #expect(runner.scripts[0]
+                == "if not spoon.FocusFollowsMouse then "
+                + "hs.loadSpoon(\"FocusFollowsMouse\") end")
+        #expect(runner.scripts[1].contains(":stop()"))
+        #expect(runner.scripts[2]
                 .contains(":configure({ delay = 0.05,"))
-        #expect(runner.scripts[1]
+        #expect(runner.scripts[3]
                 .contains(":bindHotkeys({ toggle = "))
+        #expect(runner.scripts[4].contains(":start()"))
     }
 
     @Test
@@ -102,9 +111,16 @@ struct SpoonOrchestratorTests {
             hotkeyOverrides: [:])
 
         // The live call must use per-field assignment, not :configure.
-        #expect(runner.scripts.count == 1)
-        #expect(runner.scripts[0] ==
+        // loadSpoon runs first; stop+start bracket the assignment so an
+        // event-driven Spoon picks up the new config without a reload.
+        #expect(runner.scripts.count == 4)
+        #expect(runner.scripts[0]
+                == "if not spoon.Caffeine then "
+                + "hs.loadSpoon(\"Caffeine\") end")
+        #expect(runner.scripts[1].contains(":stop()"))
+        #expect(runner.scripts[2] ==
                 "spoon.Caffeine.show_notifications = true")
+        #expect(runner.scripts[3].contains(":start()"))
     }
 
     @Test
@@ -115,13 +131,34 @@ struct SpoonOrchestratorTests {
         let orchestrator = makeOrchestrator(env: env, runner: runner)
         try await orchestrator.apply(
             entry: makeEntry(name: "X", sourceID: "catokolas",
-                             hasConfigure: true, hasStart: true),
+                             hasConfigure: true, hasStart: false),
             values: [:], hotkeyOverrides: [:])
-        // No configure / bindHotkeys script — nothing to push.
+        // hasStart=false + nothing to push → no live calls at all.
         #expect(runner.scripts.isEmpty)
         // State still persisted (Apply implies enable).
         let state = try env.store.load()
         #expect(state.spoons["X"]?.enabled == true)
+    }
+
+    @Test
+    func applyStartsEventDrivenSpoonEvenWithNoConfigOrHotkeys() async throws {
+        // hasStart=true: empty Apply should still load+start the Spoon so
+        // an event-driven Spoon (e.g. SpotifyPlayPause) actually takes
+        // effect without needing a Hammerspoon reload.
+        let env = try makeEnv()
+        defer { cleanup(env) }
+        let runner = RecordingLuaRunner(returns: "")
+        let orchestrator = makeOrchestrator(env: env, runner: runner)
+        try await orchestrator.apply(
+            entry: makeEntry(name: "SpotifyPlayPause", sourceID: "catokolas",
+                             hasConfigure: true, hasStart: true),
+            values: [:], hotkeyOverrides: [:])
+        #expect(runner.scripts.count == 3)
+        #expect(runner.scripts[0]
+                == "if not spoon.SpotifyPlayPause then "
+                + "hs.loadSpoon(\"SpotifyPlayPause\") end")
+        #expect(runner.scripts[1].contains(":stop()"))
+        #expect(runner.scripts[2].contains(":start()"))
     }
 
     @Test
@@ -163,6 +200,95 @@ struct SpoonOrchestratorTests {
         let msg = result.liveApplyError ?? ""
         #expect(msg.contains("|"),
                 "expected both errors joined, got: \(msg)")
+    }
+
+    // MARK: - pause / resume
+
+    @Test
+    func setPausedTrueWritesStateRegeneratesSnippetAndStopsSpoon()
+    async throws {
+        let env = try makeEnv()
+        defer { cleanup(env) }
+        // Seed an enabled, configured Spoon as if the user had already
+        // applied — pause toggles the existing state.
+        try env.store.update { state in
+            state.spoons["FocusFollowsMouse"] = SpoonState(
+                sourceID: "catokolas",
+                enabled:  true,
+                installedRef: .gitCommit("abc"),
+                config:  ["delay": .number(0.05)])
+        }
+        let runner = RecordingLuaRunner(returns: "")
+        let orchestrator = makeOrchestrator(env: env, runner: runner)
+        let entry = makeEntry(name: "FocusFollowsMouse",
+                              sourceID: "catokolas",
+                              hasConfigure: true, hasStart: true)
+
+        let result = try await orchestrator.setPaused(
+            entry: entry, paused: true)
+
+        #expect(result.liveAppliedOK == true)
+        // State.paused flipped.
+        let s = try env.store.load().spoons["FocusFollowsMouse"]
+        #expect(s?.paused == true)
+        #expect(s?.enabled == true)            // enabled untouched
+        // Snippet still has the block but no `start = true`.
+        let snippet = try String(contentsOf: env.snippetPath, encoding: .utf8)
+        #expect(snippet.contains(":andUse(\"FocusFollowsMouse\""))
+        #expect(snippet.contains(":configure({ delay = 0.05"))
+        #expect(!snippet.contains("start = true"))
+        // Live: only :stop() was called.
+        #expect(runner.scripts.count == 1)
+        #expect(runner.scripts[0].contains(":stop()"))
+    }
+
+    @Test
+    func setPausedFalseRestartsSpoon() async throws {
+        let env = try makeEnv()
+        defer { cleanup(env) }
+        // Start from a paused state.
+        try env.store.update { state in
+            state.spoons["FocusFollowsMouse"] = SpoonState(
+                sourceID: "catokolas",
+                enabled:  true,
+                paused:   true,
+                installedRef: .gitCommit("abc"))
+        }
+        let runner = RecordingLuaRunner(returns: "")
+        let orchestrator = makeOrchestrator(env: env, runner: runner)
+        let entry = makeEntry(name: "FocusFollowsMouse",
+                              sourceID: "catokolas",
+                              hasConfigure: true, hasStart: true)
+
+        let result = try await orchestrator.setPaused(
+            entry: entry, paused: false)
+
+        #expect(result.liveAppliedOK == true)
+        let s = try env.store.load().spoons["FocusFollowsMouse"]
+        #expect(s?.paused == false)
+        let snippet = try String(contentsOf: env.snippetPath, encoding: .utf8)
+        #expect(snippet.contains("start = true"))
+        // Live: idempotent loadSpoon, then :start().
+        #expect(runner.scripts.count == 2)
+        #expect(runner.scripts[0]
+                == "if not spoon.FocusFollowsMouse then "
+                + "hs.loadSpoon(\"FocusFollowsMouse\") end")
+        #expect(runner.scripts[1].contains(":start()"))
+    }
+
+    @Test
+    func pausedFlagSurvivesStoreRoundTrip() throws {
+        // Belt-and-braces: write paused=true, reload, verify.
+        let env = try makeEnv()
+        defer { cleanup(env) }
+        try env.store.update { state in
+            state.spoons["X"] = SpoonState(
+                sourceID: "catokolas",
+                enabled:  true,
+                paused:   true)
+        }
+        let reloaded = try env.store.load()
+        #expect(reloaded.spoons["X"]?.paused == true)
     }
 
     // MARK: - seedState
