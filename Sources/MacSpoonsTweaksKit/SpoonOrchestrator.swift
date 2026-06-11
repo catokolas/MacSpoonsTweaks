@@ -216,6 +216,62 @@ public final class SpoonOrchestrator: @unchecked Sendable {
             liveApplyError: liveError)
     }
 
+    // MARK: - Enable / Disable
+
+    /// Flip a Spoon's `enabled` flag. Same three-step shape as `apply`
+    /// — persist → regenerate snippet → push live. For non-pausable
+    /// Spoons (those without `:stop()`, e.g. AClock) this is the only
+    /// way to remove them from the snippet at next Hammerspoon reload.
+    /// Live: loads the Spoon on enable; no-op on disable (the running
+    /// instance keeps running until reload).
+    @discardableResult
+    public func setEnabled(
+        entry: SpoonCatalogEntry,
+        enabled: Bool
+    ) async throws -> ApplyResult {
+        do {
+            try store.update { state in
+                if var s = state.spoons[entry.name] {
+                    s.enabled = enabled
+                    state.spoons[entry.name] = s
+                } else {
+                    state.spoons[entry.name] = SpoonState(
+                        sourceID: entry.sourceID, enabled: enabled)
+                }
+            }
+        } catch {
+            throw ApplyError.persistFailed(error)
+        }
+
+        do {
+            let state = try store.load()
+            let snippet = SnippetGenerator.generate(
+                state:     state,
+                catalog:   catalogProvider(),
+                repos:     reposProvider(),
+                timestamp: clock())
+            try writeSnippet(snippet)
+        } catch {
+            throw ApplyError.snippetWriteFailed(error)
+        }
+
+        var liveOK    = true
+        var liveError: String? = nil
+        if enabled {
+            do {
+                _ = try await runner.runLua(
+                    HammerspoonScript.loadSpoon(entry.name), timeout: 5)
+            } catch {
+                liveOK    = false
+                liveError = String(describing: error)
+            }
+        }
+        return ApplyResult(
+            snippetPath:    snippetPath,
+            liveAppliedOK:  liveOK,
+            liveApplyError: liveError)
+    }
+
     // MARK: - Pause / Resume
 
     /// Toggle a Spoon's `paused` flag. Same three-step shape as `apply`

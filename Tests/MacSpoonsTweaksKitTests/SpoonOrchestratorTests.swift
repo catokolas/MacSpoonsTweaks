@@ -277,6 +277,58 @@ struct SpoonOrchestratorTests {
     }
 
     @Test
+    func setEnabledRemovesAndUseBlockFromSnippet() async throws {
+        // AClock has neither :start nor :stop; the Active toggle in
+        // the UI maps to `enabled` for it. Disabling must drop the
+        // andUse block on next snippet regen.
+        let env = try makeEnv()
+        defer { cleanup(env) }
+        try env.store.update { state in
+            state.spoons["AClock"] = SpoonState(
+                sourceID: "hammerspoon-official",
+                enabled:  true,
+                installedRef: .zipETag(value: "etag",
+                                       fetchedAt: Date()))
+        }
+        let runner = RecordingLuaRunner(returns: "")
+        let orchestrator = makeOrchestrator(env: env, runner: runner)
+        let entry = makeEntry(name: "AClock",
+                              sourceID: "hammerspoon-official",
+                              hasConfigure: false, hasStart: false)
+
+        _ = try await orchestrator.setEnabled(entry: entry, enabled: false)
+
+        let s = try env.store.load().spoons["AClock"]
+        #expect(s?.enabled == false)
+        let snippet = try String(contentsOf: env.snippetPath, encoding: .utf8)
+        #expect(!snippet.contains(":andUse(\"AClock\""))
+        // No live script on disable (the running instance keeps
+        // running until next reload).
+        #expect(runner.scripts.isEmpty)
+    }
+
+    @Test
+    func setEnabledTrueLoadsSpoonAndKeepsAndUseBlock() async throws {
+        let env = try makeEnv()
+        defer { cleanup(env) }
+        let runner = RecordingLuaRunner(returns: "")
+        let orchestrator = makeOrchestrator(env: env, runner: runner)
+        let entry = makeEntry(name: "AClock",
+                              sourceID: "hammerspoon-official",
+                              hasConfigure: false, hasStart: false)
+
+        _ = try await orchestrator.setEnabled(entry: entry, enabled: true)
+
+        let s = try env.store.load().spoons["AClock"]
+        #expect(s?.enabled == true)
+        let snippet = try String(contentsOf: env.snippetPath, encoding: .utf8)
+        #expect(snippet.contains(":andUse(\"AClock\""))
+        // Idempotent loadSpoon emitted on enable.
+        #expect(runner.scripts.count == 1)
+        #expect(runner.scripts[0].contains("hs.loadSpoon(\"AClock\")"))
+    }
+
+    @Test
     func pausedFlagSurvivesStoreRoundTrip() throws {
         // Belt-and-braces: write paused=true, reload, verify.
         let env = try makeEnv()
@@ -386,6 +438,14 @@ struct SpoonOrchestratorTests {
                 sourceID: "catokolas",
                 hasConfigure: true,
                 hasStart: true),
+            // AClock-style: upstream widget with no :start/:stop, so
+            // the Active toggle has to drive `enabled` for it.
+            "AClock": makeEntry(
+                name: "AClock",
+                sourceID: "hammerspoon-official",
+                hasConfigure: false,
+                hasStart: false,
+                hasStop:  false),
         ]
     }
 
@@ -393,7 +453,8 @@ struct SpoonOrchestratorTests {
         name: String,
         sourceID: String,
         hasConfigure: Bool,
-        hasStart: Bool
+        hasStart: Bool,
+        hasStop:  Bool = true
     ) -> SpoonCatalogEntry {
         return SpoonCatalogEntry(
             id: "\(sourceID):\(name)",
@@ -403,7 +464,7 @@ struct SpoonOrchestratorTests {
                 version: "0.1", description: nil,
                 author: nil, homepage: nil, license: nil),
             lifecycle: Lifecycle(
-                hasStart: hasStart, hasStop: true, hasToggle: false,
+                hasStart: hasStart, hasStop: hasStop, hasToggle: false,
                 hasConfigure: hasConfigure, eventDriven: false),
             config:  [], hotkeys: [],
             provenance: .manifest)

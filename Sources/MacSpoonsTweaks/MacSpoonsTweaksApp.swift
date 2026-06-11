@@ -522,6 +522,55 @@ final class SpoonCatalogModel: ObservableObject {
             .sorted { $0.name.localizedCompare($1.name) == .orderedAscending }
     }
 
+    // MARK: - Active toggle (unified)
+
+    /// "Is this Spoon doing what I want?" — wraps the enabled/paused
+    /// fields so the UI doesn't have to branch on lifecycle. True means
+    /// either (a) the Spoon has start/stop and isn't paused, or
+    /// (b) the Spoon has no start/stop but is enabled (in the snippet).
+    func isActive(_ entry: SpoonCatalogEntry) -> Bool {
+        _ = installSeq
+        let state = (try? stateStore.load()) ?? AppState()
+        guard let s = state.spoons[entry.name] else { return false }
+        if entry.lifecycle.hasStart && entry.lifecycle.hasStop {
+            return s.enabled && !s.paused
+        }
+        return s.enabled
+    }
+
+    /// Flip Active. For pausable Spoons toggles `paused`; for the rest
+    /// (AClock-style) toggles `enabled`. Activating always ensures
+    /// `enabled=true && paused=false` so the snippet has a fresh state.
+    @discardableResult
+    func setActive(
+        _ entry: SpoonCatalogEntry, _ active: Bool
+    ) async throws -> SpoonOrchestrator.ApplyResult {
+        let result: SpoonOrchestrator.ApplyResult
+        if entry.lifecycle.hasStart && entry.lifecycle.hasStop {
+            result = try await orchestrator.setPaused(
+                entry: entry, paused: !active)
+        } else {
+            result = try await orchestrator.setEnabled(
+                entry: entry, enabled: active)
+        }
+        installSeq += 1
+        recomputeHotkeyConflicts()
+        return result
+    }
+
+    /// Every installed Spoon — surfaced in the menu submenu so the user
+    /// can toggle Active for the non-pausable ones too. Sorted by name.
+    func toggleableInstalledSpoons() -> [SpoonCatalogEntry] {
+        _ = installSeq
+        let state = (try? stateStore.load()) ?? AppState()
+        return entries
+            .filter { entry in
+                guard let s = state.spoons[entry.name] else { return false }
+                return s.installedRef != nil
+            }
+            .sorted { $0.name.localizedCompare($1.name) == .orderedAscending }
+    }
+
     // MARK: - Catalog drift
 
     /// Diff between an installed Spoon's captured schema and the

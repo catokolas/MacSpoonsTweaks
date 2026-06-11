@@ -44,20 +44,20 @@ struct MenuBarContent: View {
 
     @ViewBuilder
     private var pauseSubmenu: some View {
-        let pausable = catalog.pausableEnabledSpoons()
-        // "Active Spoons" reads with the checkmark: checked = active,
-        // unchecked = paused. Click to toggle.
+        // Every installed Spoon — checked = active.
+        // For pausable Spoons (hasStart && hasStop) the toggle flips
+        // `paused`; for the rest (AClock-style) it flips `enabled`.
+        let togglable = catalog.toggleableInstalledSpoons()
         Menu("Active Spoons") {
-            if pausable.isEmpty {
-                Button("(no pausable Spoons)") {}.disabled(true)
+            if togglable.isEmpty {
+                Button("(no installed Spoons)") {}.disabled(true)
             } else {
-                ForEach(pausable, id: \.id) { entry in
+                ForEach(togglable, id: \.id) { entry in
                     Toggle(entry.name, isOn: Binding(
-                        get: { !catalog.isPaused(entry) },
+                        get: { catalog.isActive(entry) },
                         set: { active in
                             Task {
-                                try? await catalog
-                                    .setPaused(entry, !active)
+                                try? await catalog.setActive(entry, active)
                             }
                         }))
                 }

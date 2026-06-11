@@ -343,20 +343,24 @@ struct SpoonDetailView: View {
                 }
                 .disabled(values.isEmpty && hotkeyOverrides.isEmpty
                           || applyState == .inFlight)
-                if catalog.isInstalled(entry)
-                    && entry.lifecycle.hasStart
-                    && entry.lifecycle.hasStop {
-                    let isPaused = catalog.isPaused(entry)
+                if catalog.isInstalled(entry) {
+                    let active   = catalog.isActive(entry)
+                    let pausable = entry.lifecycle.hasStart
+                                && entry.lifecycle.hasStop
                     Toggle("Active", isOn: Binding(
-                        get: { !isPaused },
-                        set: { active in
-                            Task { await togglePause(to: !active) }
+                        get: { active },
+                        set: { newActive in
+                            Task { await applyActive(newActive) }
                         }))
                     .toggleStyle(.switch)
                     .disabled(applyState == .inFlight)
-                    .help(isPaused
-                          ? "Deactivated — Spoon stays in the snippet but isn’t running. Toggle on to call :start()."
-                          : "Active — Spoon is running. Toggle off to call :stop() and omit start = true from the snippet. Config and hotkeys are preserved.")
+                    .help(pausable
+                          ? (active
+                             ? "Spoon is running. Toggle off to call :stop() and omit start = true from the snippet."
+                             : "Spoon is paused (still in the snippet). Toggle on to call :start().")
+                          : (active
+                             ? "Spoon is enabled in the snippet. Toggle off to remove its andUse block on the next reload."
+                             : "Spoon is disabled — no andUse block emitted. Toggle on to add it back."))
                 }
                 Spacer()
                 Button {
@@ -444,11 +448,11 @@ struct SpoonDetailView: View {
         }
     }
 
-    private func togglePause(to paused: Bool) async {
+    private func applyActive(_ active: Bool) async {
         applyState = .inFlight
         applyMessage = nil
         do {
-            let result = try await catalog.setPaused(entry, paused)
+            let result = try await catalog.setActive(entry, active)
             if result.liveAppliedOK {
                 applyState = .appliedOK
             } else {
