@@ -132,8 +132,12 @@ struct SnippetGeneratorTests {
 
         // No repo registration for default.
         #expect(!snippet.contains("spoon.SpoonInstall.repos["))
-        // Flat config form (no fn wrapper).
-        #expect(snippet.contains("repo = \"hammerspoon-official\","))
+        // Flat config form (no fn wrapper). The andUse block emits the
+        // SpoonInstall repo NAME ("default"), not the catalog source
+        // id ("hammerspoon-official") — that's the only string
+        // spoon.SpoonInstall.repos knows about for upstream Spoons.
+        #expect(snippet.contains("repo = \"default\","))
+        #expect(!snippet.contains("repo = \"hammerspoon-official\","))
         #expect(snippet.contains("config = { show_notifications = true },"))
         #expect(!snippet.contains("fn = function"))
         #expect(snippet.contains("start = true,"))

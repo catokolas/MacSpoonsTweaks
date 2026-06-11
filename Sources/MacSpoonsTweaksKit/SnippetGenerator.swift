@@ -103,7 +103,8 @@ public enum SnippetGenerator {
         }
 
         for (name, s, entry) in emittable {
-            out.append(renderAndUse(name: name, state: s, entry: entry))
+            out.append(renderAndUse(
+                name: name, state: s, entry: entry, repos: repos))
             out.append("")
         }
 
@@ -113,10 +114,18 @@ public enum SnippetGenerator {
     // MARK: - Internals
 
     private static func renderAndUse(
-        name: String, state: SpoonState, entry: SpoonCatalogEntry
+        name: String, state: SpoonState, entry: SpoonCatalogEntry,
+        repos: [String: RepoRef]
     ) -> String {
         var fields: [String] = []
-        fields.append("  repo = \(LuaLiteral.encodeString(state.sourceID)),")
+        // Translate sourceID → the actual SpoonInstall repo name. For
+        // "hammerspoon-official" that's "default" (built into
+        // SpoonInstall); for "catokolas" it's "catokolas" (which we
+        // registered above). Without the translation, andUse can't
+        // resolve the repo for upstream Spoons and silently skips the
+        // hotkey/start wiring.
+        let repoName = repos[state.sourceID]?.id ?? state.sourceID
+        fields.append("  repo = \(LuaLiteral.encodeString(repoName)),")
 
         // Config branch: nested-merge `fn` for Spoons with :configure;
         // flat `config` for upstream Spoons that lack it.
