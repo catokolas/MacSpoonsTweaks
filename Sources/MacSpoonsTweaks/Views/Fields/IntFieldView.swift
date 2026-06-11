@@ -10,13 +10,18 @@ struct IntFieldView: View {
             HStack {
                 Text(field.label ?? field.key)
                 Spacer()
-                Stepper(
-                    "",
-                    value: $value,
-                    in: (field.min ?? .min)...(field.max ?? .max),
-                    step: field.step ?? 1
-                )
-                .labelsHidden()
+                if let range = boundedRange {
+                    // Stepper internally computes
+                    // `lowerBound.distance(to: upperBound)` on Int,
+                    // which overflows and traps for Int.min ... Int.max.
+                    // Only render it when both bounds are sane.
+                    Stepper(
+                        "",
+                        value: $value,
+                        in: range,
+                        step: field.step ?? 1)
+                    .labelsHidden()
+                }
                 TextField("", value: $value, format: .number)
                     .textFieldStyle(.roundedBorder)
                     .frame(width: 80)
@@ -29,5 +34,14 @@ struct IntFieldView: View {
                 Text(desc).font(.caption).foregroundStyle(.secondary)
             }
         }
+    }
+
+    /// Only emit a range when both bounds exist AND don't risk
+    /// overflow in `Strideable.distance(to:)`. Inferred upstream fields
+    /// (BonjourLauncher etc.) often leave min/max unset.
+    private var boundedRange: ClosedRange<Int>? {
+        guard let lo = field.min, let hi = field.max, lo <= hi
+        else { return nil }
+        return lo...hi
     }
 }
