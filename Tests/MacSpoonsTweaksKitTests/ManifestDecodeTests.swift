@@ -222,6 +222,49 @@ struct ManifestDecodeTests {
     }
 
     @Test
+    func knownIssuesDecodes() throws {
+        let json = """
+        {
+          "schemaVersion": 1, "name": "X", "version": "0.1",
+          "lifecycle": {
+            "hasStart": false, "hasStop": false, "hasToggle": false,
+            "hasConfigure": false, "eventDriven": false
+          },
+          "config": [], "hotkeys": [],
+          "knownIssues": [
+            { "title": "Needs Accessibility",
+              "description": "Won't work without Accessibility access." },
+            { "title": "macOS 26 quirk",
+              "description": "Sometimes flickers on macOS 26." }
+          ]
+        }
+        """
+        let m = try JSONDecoder().decode(
+            SpoonManifest.self, from: Data(json.utf8))
+        #expect(m.knownIssues.count == 2)
+        #expect(m.knownIssues[0].title == "Needs Accessibility")
+        #expect(m.knownIssues[1].title == "macOS 26 quirk")
+        #expect(m.knownIssues[0].description.contains("Accessibility access"))
+    }
+
+    @Test
+    func manifestWithoutKnownIssuesFieldDecodesAsEmpty() throws {
+        let json = """
+        {
+          "schemaVersion": 1, "name": "X", "version": "0.1",
+          "lifecycle": {
+            "hasStart": false, "hasStop": false, "hasToggle": false,
+            "hasConfigure": false, "eventDriven": false
+          },
+          "config": [], "hotkeys": []
+        }
+        """
+        let m = try JSONDecoder().decode(
+            SpoonManifest.self, from: Data(json.utf8))
+        #expect(m.knownIssues.isEmpty)
+    }
+
+    @Test
     func assetPatternGlobMatchesUniversalZip() {
         #expect(matchAssetPattern(
             "multitouch-*-macos-universal.zip",

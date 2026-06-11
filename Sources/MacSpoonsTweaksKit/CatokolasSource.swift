@@ -104,6 +104,7 @@ public final class CatokolasSource: CatalogSource, @unchecked Sendable {
                 config:          manifest.config,
                 hotkeys:         manifest.hotkeys,
                 optionalModules: manifest.optionalModules,
+                knownIssues:     manifest.knownIssues,
                 provenance:      .manifest
             )
         }

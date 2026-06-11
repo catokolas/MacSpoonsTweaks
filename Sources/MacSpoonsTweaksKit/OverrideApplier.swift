@@ -54,6 +54,7 @@ public enum OverrideApplier {
             config:           override.config,
             hotkeys:          override.hotkeys,
             optionalModules:  override.optionalModules,
+            knownIssues:      override.knownIssues,
             provenance:       .override(of: entry.sourceID))
     }
 

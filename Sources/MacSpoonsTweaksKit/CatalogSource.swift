@@ -16,6 +16,9 @@ public struct SpoonCatalogEntry: Identifiable, Sendable {
     /// in the detail view so the user can install / update them via
     /// the `NativeModuleInstaller`.
     public var optionalModules: [OptionalModule] = []
+    /// Known bugs / limitations the maintainer wanted surfaced.
+    /// Defaults to `[]` for upstream / inferred entries.
+    public var knownIssues:     [KnownIssue]     = []
     public var provenance: ConfigProvenance
 }
 

@@ -45,6 +45,10 @@ struct SpoonDetailView: View {
                 header
                 installStateBar
                 provenanceNote
+                if !entry.knownIssues.isEmpty {
+                    Divider()
+                    KnownIssuesSection(issues: entry.knownIssues)
+                }
                 if !entry.optionalModules.isEmpty {
                     Divider()
                     OptionalModulesSection(modules: entry.optionalModules)

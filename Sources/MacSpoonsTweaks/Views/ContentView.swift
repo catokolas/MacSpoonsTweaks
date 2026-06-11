@@ -349,6 +349,16 @@ private struct SpoonRow: View {
                             .imageScale(.small)
                             .help("Update available")
                     }
+                    if !entry.knownIssues.isEmpty {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.orange)
+                            .imageScale(.small)
+                            .help(
+                                "Known issue: "
+                                + entry.knownIssues
+                                    .map(\.title)
+                                    .joined(separator: "; "))
+                    }
                 }
                 if let desc = entry.metadata.description {
                     Text(desc)

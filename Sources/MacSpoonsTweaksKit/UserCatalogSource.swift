@@ -95,6 +95,7 @@ public final class UserCatalogSource: CatalogSource, @unchecked Sendable {
                 config:          manifest.config,
                 hotkeys:         manifest.hotkeys,
                 optionalModules: manifest.optionalModules,
+                knownIssues:     manifest.knownIssues,
                 provenance:      .manifest)
         }
     }

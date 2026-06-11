@@ -34,6 +34,11 @@ public struct SpoonManifest: Decodable, Identifiable, Sendable {
     /// manifests written before the field existed.
     public var optionalModules: [OptionalModule]
 
+    /// Known bugs / limitations the maintainer wants surfaced in the
+    /// app. Empty if the Spoon has none declared. Backward-compat: old
+    /// manifests decode with `[]`.
+    public var knownIssues: [KnownIssue]
+
     public var id: String { name }
 
     public init(
@@ -47,7 +52,8 @@ public struct SpoonManifest: Decodable, Identifiable, Sendable {
         lifecycle: Lifecycle,
         config:  [ConfigField] = [],
         hotkeys: [HotkeyAction] = [],
-        optionalModules: [OptionalModule] = []
+        optionalModules: [OptionalModule] = [],
+        knownIssues:     [KnownIssue]     = []
     ) {
         self.schemaVersion   = schemaVersion
         self.name            = name
@@ -60,11 +66,13 @@ public struct SpoonManifest: Decodable, Identifiable, Sendable {
         self.config          = config
         self.hotkeys         = hotkeys
         self.optionalModules = optionalModules
+        self.knownIssues     = knownIssues
     }
 
     private enum CodingKeys: String, CodingKey {
         case schemaVersion, name, version, description, author, homepage
         case license, lifecycle, config, hotkeys, optionalModules
+        case knownIssues
     }
 
     public init(from decoder: Decoder) throws {
@@ -81,6 +89,8 @@ public struct SpoonManifest: Decodable, Identifiable, Sendable {
         self.hotkeys     = try c.decode([HotkeyAction].self, forKey: .hotkeys)
         self.optionalModules = try c.decodeIfPresent(
             [OptionalModule].self, forKey: .optionalModules) ?? []
+        self.knownIssues = try c.decodeIfPresent(
+            [KnownIssue].self, forKey: .knownIssues) ?? []
     }
 }
 
