@@ -1,112 +1,86 @@
 # MacSpoonsTweaks
 
-Native macOS app that installs and configures Hammerspoon Spoons from
+[![Release](https://img.shields.io/github/v/release/catokolas/MacSpoonsTweaks?sort=semver)](https://github.com/catokolas/MacSpoonsTweaks/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/catokolas/MacSpoonsTweaks/total)](https://github.com/catokolas/MacSpoonsTweaks/releases)
+[![macOS](https://img.shields.io/badge/macOS-14%2B-blue)](https://www.apple.com/macos/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
+
+A small SwiftUI companion for [Hammerspoon](https://www.hammerspoon.org).
+Browse, install, and configure
+[Spoons](https://www.hammerspoon.org/Spoons/) — Hammerspoon's plugin
+format — through typed forms and a menu bar shortcut, without
+hand-editing `~/.hammerspoon/init.lua`.
+
+Pairs naturally with
 [`catokolas/HS_SpoonsContrib`](https://github.com/catokolas/HS_SpoonsContrib)
-and the official [`Hammerspoon/Spoons`](https://github.com/Hammerspoon/Spoons)
-catalog. Install / load / configure / start is delegated at runtime to
-[`SpoonInstall.spoon`](https://www.hammerspoon.org/Spoons/SpoonInstall.html);
-the app writes a managed `~/.hammerspoon/mac_spoons_tweaks.lua` snippet
-(a series of `spoon.SpoonInstall:andUse(name, {...})` blocks) and applies
-config changes live via `hs -c`.
+(curated Spoons + optional native helpers) and the official
+[`Hammerspoon/Spoons`](https://github.com/Hammerspoon/Spoons) catalog.
 
-See `~/.claude/plans/plan-how-to-make-glowing-tarjan.md` for the full
-implementation plan.
+## Requirements
 
-## Layout
+- **macOS 14** (Sonoma) or newer
+- **Hammerspoon** installed:
 
-```
-Package.swift                                 # SPM, macOS 14+, Swift 5.10+
-Sources/
-├── MacSpoonsTweaksKit/                       # pure-data layer, CLI-testable
-│   ├── ConfigValue.swift                     # typed value tree (Codable)
-│   ├── Manifest.swift                        # spoons.json decode model
-│   ├── CatalogSource.swift                   # protocol + SpoonCatalogEntry
-│   └── CatokolasSource.swift                 # ETag-cached fetcher for catokolas
-└── MacSpoonsTweaks/                          # SwiftUI @main app, depends on Kit
-    ├── MacSpoonsTweaksApp.swift              # @main + SpoonCatalogModel (ObservableObject)
-    └── Views/ContentView.swift               # NavigationSplitView stub
-Tests/MacSpoonsTweaksKitTests/
-├── ManifestDecodeTests.swift                 # Swift Testing (`import Testing`)
-└── Fixtures/spoons.json                      # pinned copy of HS_SpoonsContrib/spoons.json
-```
+  ```sh
+  brew install --cask hammerspoon
+  ```
 
-## Build / test from CLI
+  (Or download the `.app` from
+  [hammerspoon.org](https://www.hammerspoon.org).) Launch it once so it
+  registers itself.
 
-The CommandLineTools toolchain doesn't ship XCTest / Swift Testing, so
-point the Swift CLI at Xcode's toolchain:
+That's it. MacSpoonsTweaks drives Hammerspoon through its bundled `hs`
+command-line tool, which Homebrew symlinks automatically. If you
+installed Hammerspoon by dragging the `.app` and the app can't reach
+it, open the Hammerspoon console and run `hs.ipc.cliInstall()` once.
+
+## Install
+
+### Homebrew *(recommended, coming soon)*
+
+A Homebrew cask is in preparation. Once published:
 
 ```sh
-DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift build
-DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test
+brew install --cask catokolas/tap/macspoonstweaks
 ```
 
-Or `xcode-select -s` to make Xcode the default and drop the env var.
+### Download the latest release
 
-## Running the app
+Grab `MacSpoonsTweaks-x.y.z.zip` from
+[Releases](https://github.com/catokolas/MacSpoonsTweaks/releases), unzip
+it, and drag `MacSpoonsTweaks.app` into `/Applications`.
 
-Open `Package.swift` in Xcode and press Run. (`swift run MacSpoonsTweaks`
-from CLI works but Mac-app affordances — menu bar, dock activation —
-come up cleaner from Xcode.)
+The build is ad-hoc signed, so the first launch needs **right-click →
+Open → Open**. macOS remembers after that.
 
-1. Xcode (recommended for development)
+### Build from source
 
-  cd ~/git/MacSpoonsTweaks
-  open Package.swift
+If you have Xcode 16+:
 
-  Xcode opens, treats the package as a project. Top toolbar:
-  - Scheme selector → MacSpoonsTweaks
-  - Build target → My Mac
+```sh
+git clone https://github.com/catokolas/MacSpoonsTweaks.git
+cd MacSpoonsTweaks
+./tools/build-app.sh
+open build/MacSpoonsTweaks.app
+```
 
-  Then ⌘R. App launches, you get incremental rebuilds, the SwiftUI canvas works in any
-   view file, breakpoints work.
+See [DEVELOPERS.md](DEVELOPERS.md) for the full developer setup.
 
-  This is the only setup where SwiftUI previews work — pop open SpoonDetailView.swift
-  and click "Resume" in the canvas to live-preview the detail panel without launching
-  the app.
+## First run
 
-  2. swift run from CLI (quick smoke test)
+1. Launch MacSpoonsTweaks. Look for the puzzle-piece icon in the menu
+   bar.
+2. The sidebar lists every Spoon in the two catalogs (catokolas + the
+   official Hammerspoon collection). Pick one.
+3. Click **Install**. The app fetches the Spoon and asks you (via a
+   banner) to patch your `init.lua` so it loads the generated snippet.
+4. Edit the typed config form to taste, set hotkeys with the recorder,
+   and click **Apply**. State is saved, the snippet at
+   `~/.hammerspoon/mac_spoons_tweaks.lua` is regenerated, and the
+   change is pushed live to the running Hammerspoon.
+5. From the menu bar's *Active Spoons ▶* submenu you can activate /
+   deactivate any installed Spoon without opening the window.
 
-  cd ~/git/MacSpoonsTweaks
-  DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift run -c release MacSpoonsTweaks
+## License
 
-  Launches the app from Terminal. Works, but it runs as a Terminal subprocess: no
-  proper Dock icon, no Cmd-Tab presence, no menu bar. Fine for "does it crash on
-  launch?" sanity checks. Ctrl-C in Terminal quits it.
-
-  The DEVELOPER_DIR prefix is the same SDK detail the README documents —
-  CommandLineTools doesn't ship SwiftUI for this kind of build.
-
-  3. Build a real .app bundle
-
-  cd ~/git/MacSpoonsTweaks
-  ./tools/build-app.sh        # default: ad-hoc signed
-  open build/MacSpoonsTweaks.app
-
-  Produces a proper Mac app under build/ that behaves like any other app — Dock icon,
-  menu bar, Cmd-Tab, the works. First double-click may show a Gatekeeper "unidentified
-   developer" dialog because of ad-hoc signing; right-click the app → Open → Open
-  clears it and macOS remembers.
-
-  This is what you'd hand to a friend.
-
-The app fetches `https://raw.githubusercontent.com/catokolas/HS_SpoonsContrib/main/spoons.json`
-on launch and lists the six Spoons in the sidebar. Selecting one shows
-a stub detail panel listing the schema. The full config UI, hotkey
-recorder, install/update/remove, snippet generation, and SpoonInstall
-bootstrap are still to come — see the plan file for sequencing.
-
-## Status
-
-Phase 2 (skeleton + Source 1) is in place:
-
-- ✅ SPM project (`MacSpoonsTweaksKit` library + `MacSpoonsTweaks` executable)
-- ✅ Full data model (`SpoonsCatalog` / `SpoonManifest` / `ConfigField`
-  discriminated union with recursive `object` support)
-- ✅ `ConfigValue` typed tree with JSON round-trip
-- ✅ `CatalogSource` protocol + `CatokolasSource` (URLSession + ETag
-  caching, falls back to disk cache offline)
-- ✅ Minimal SwiftUI shell (NavigationSplitView, sidebar, detail stub)
-- ✅ 8 decode tests passing against the real `spoons.json` fixture
-
-Next: `LuaLiteral` + `HammerspoonBridge` (phase 3 of the plan) — the
-foundational pieces every later phase depends on.
+MIT.
