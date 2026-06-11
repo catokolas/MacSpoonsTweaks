@@ -50,6 +50,24 @@ struct MacSpoonsTweaksApp: App {
 
 /// Lock-guarded snapshot of the catalog so the orchestrator's
 /// `@Sendable` provider closures can read it from any actor.
+/// Lock-guarded `[String: RepoRef]` snapshot — same pattern as
+/// `CatalogCache`, used by the orchestrator's `reposProvider` closure
+/// so user-added catalogs become installable as soon as they're added.
+private final class ReposCache: @unchecked Sendable {
+    private let lock = NSLock()
+    private var byID: [String: RepoRef] = [:]
+
+    func update(_ new: [String: RepoRef]) {
+        lock.lock(); defer { lock.unlock() }
+        byID = new
+    }
+
+    func read() -> [String: RepoRef] {
+        lock.lock(); defer { lock.unlock() }
+        return byID
+    }
+}
+
 private final class CatalogCache: @unchecked Sendable {
     private let lock = NSLock()
     private var entries: [String: SpoonCatalogEntry] = [:]
@@ -75,7 +93,12 @@ final class SpoonCatalogModel: ObservableObject {
 
     private let catokolasSource = CatokolasSource()
     private let officialSource  = HammerspoonOfficialSource()
+    /// User-added catalogs hydrated from `state.customCatalogs`. Mutated
+    /// by `addCustomCatalog` / `removeCustomCatalog` / `setCatalogEnabled`;
+    /// `refresh()` fans out across every enabled entry.
+    @Published private(set) var userSources: [UserCatalogSource] = []
     private let catalogCache    = CatalogCache()
+    private let reposCache      = ReposCache()
 
     /// Live runner picked at startup. Nil when no `hs` CLI exists →
     /// orchestrator falls back to `NoOpLuaRunner` so Apply still
@@ -168,13 +191,15 @@ final class SpoonCatalogModel: ObservableObject {
             cache.read()
         }
         let catokolasRepo: RepoRef = catokolasSource.repoRef
+        // Seed the reposCache with the built-ins; user-added catalogs
+        // are merged in via `rebuildReposCache()` after hydration.
+        reposCache.update([
+            "catokolas":            catokolasRepo,
+            "hammerspoon-official": .default,
+        ])
+        let repos = reposCache
         let reposByID: @Sendable () -> [String: RepoRef] = {
-            // CatokolasSource → custom repo registration.
-            // HammerspoonOfficialSource → built-in "default".
-            return [
-                "catokolas":               catokolasRepo,
-                "hammerspoon-official":    .default,
-            ]
+            repos.read()
         }
 
         self.orchestrator = SpoonOrchestrator(
@@ -218,6 +243,97 @@ final class SpoonCatalogModel: ObservableObject {
                 self.recentInvocations = snapshot.reversed()  // newest-first
             }
         }
+
+        // Hydrate user catalogs from state.json so they survive a
+        // relaunch. `rebuildReposCache` keeps the orchestrator's
+        // reposProvider consistent with the user-added set.
+        hydrateUserSourcesFromState()
+        rebuildReposCache()
+    }
+
+    // MARK: - Custom catalogs
+
+    private func hydrateUserSourcesFromState() {
+        let state = (try? stateStore.load()) ?? AppState()
+        userSources = state.customCatalogs
+            .filter(\.enabled)
+            .map { UserCatalogSource(config: $0) }
+    }
+
+    private func rebuildReposCache() {
+        let catokolasRepo = catokolasSource.repoRef
+        var byID: [String: RepoRef] = [
+            "catokolas":            catokolasRepo,
+            "hammerspoon-official": .default,
+        ]
+        for src in userSources {
+            byID[src.id] = src.repoRef
+        }
+        reposCache.update(byID)
+    }
+
+    /// Add a user catalog, persist, and refresh.
+    /// Returns true on success; false if a probe of the spoons.json
+    /// fails (the caller — the Manage catalogs sheet — surfaces the
+    /// reason via its own form state).
+    func addCustomCatalog(
+        owner: String, repo: String,
+        branch: String = "main", description: String? = nil
+    ) async -> Bool {
+        let config = CustomCatalogConfig(
+            owner: owner, repo: repo,
+            branch: branch, description: description, enabled: true)
+        do {
+            // Probe the catalog URL before persisting. Any non-2xx or
+            // network error means we don't add the row.
+            let probe = UserCatalogSource(config: config)
+            _ = try await probe.refresh()
+        } catch {
+            return false
+        }
+        do {
+            try stateStore.update { state in
+                // Idempotent: replace any prior entry for the same id.
+                state.customCatalogs.removeAll { $0.id == config.id }
+                state.customCatalogs.append(config)
+            }
+        } catch {
+            return false
+        }
+        hydrateUserSourcesFromState()
+        rebuildReposCache()
+        await refresh()
+        return true
+    }
+
+    func removeCustomCatalog(id: String) async {
+        do {
+            try stateStore.update { state in
+                state.customCatalogs.removeAll { $0.id == id }
+            }
+        } catch { return }
+        hydrateUserSourcesFromState()
+        rebuildReposCache()
+        await refresh()
+    }
+
+    func setCatalogEnabled(id: String, enabled: Bool) async {
+        do {
+            try stateStore.update { state in
+                if let i = state.customCatalogs.firstIndex(where: { $0.id == id }) {
+                    state.customCatalogs[i].enabled = enabled
+                }
+            }
+        } catch { return }
+        hydrateUserSourcesFromState()
+        rebuildReposCache()
+        await refresh()
+    }
+
+    /// SwiftUI-friendly snapshot for the Manage catalogs sheet.
+    func customCatalogConfigs() -> [CustomCatalogConfig] {
+        let state = (try? stateStore.load()) ?? AppState()
+        return state.customCatalogs
     }
 
     // MARK: - init.lua patcher
@@ -265,22 +381,32 @@ final class SpoonCatalogModel: ObservableObject {
         return state.spoons[entry.name]?.installedRef != nil
     }
 
-    /// Resolves a `RepoRef` for the given source.
+    /// Resolves a `RepoRef` for the given source. User catalogs share
+    /// the catokolas-style `.custom` shape and bypass the default.
     private func repoRef(for sourceID: String) -> RepoRef {
         switch sourceID {
         case catokolasSource.id: return catokolasSource.repoRef
-        default:                 return .default
+        default:
+            if let src = userSources.first(where: { $0.id == sourceID }) {
+                return src.repoRef
+            }
+            return .default
         }
     }
 
     /// Placeholder ref recorded at install time — the real one is filled
     /// in by `UpdateChecker` in a later phase. Until then "installed
-    /// but unknown ref" still satisfies `isInstalled`.
+    /// but unknown ref" still satisfies `isInstalled`. User catalogs
+    /// share the catokolas placeholder shape (git-commit).
     private func placeholderRef(for sourceID: String) -> InstalledRef {
         switch sourceID {
         case catokolasSource.id: return .gitCommit("installed")
-        default:                 return .zipETag(value: "installed",
-                                                 fetchedAt: Date())
+        default:
+            if userSources.contains(where: { $0.id == sourceID }) {
+                return .gitCommit("installed")
+            }
+            return .zipETag(value: "installed",
+                            fetchedAt: Date())
         }
     }
 
@@ -533,7 +659,11 @@ final class SpoonCatalogModel: ObservableObject {
         switch entry.sourceID {
         case catokolasSource.id:    return catokolasSource.updateCheckStrategy(for: entry)
         case officialSource.id:     return officialSource.updateCheckStrategy(for: entry)
-        default:                    return nil
+        default:
+            if let src = userSources.first(where: { $0.id == entry.sourceID }) {
+                return src.updateCheckStrategy(for: entry)
+            }
+            return nil
         }
     }
 
@@ -556,25 +686,53 @@ final class SpoonCatalogModel: ObservableObject {
         loadState = .loading
         lastError = nil
         do {
-            // Fetch both sources in parallel.
+            // Fetch built-in sources in parallel.
             async let catokolas = catokolasSource.refresh()
             async let upstream  = officialSource.refresh()
             let ours      = try await catokolas
             let theirsRaw = (try? await upstream) ?? []
+
+            // User catalogs are best-effort: a single bad catalog must
+            // not poison the whole sidebar. Fetch them in parallel and
+            // swallow individual errors.
+            let snapshot = userSources
+            var userEntries: [[SpoonCatalogEntry]] = []
+            await withTaskGroup(of: [SpoonCatalogEntry].self) { group in
+                for source in snapshot {
+                    group.addTask {
+                        return (try? await source.refresh()) ?? []
+                    }
+                }
+                for await result in group {
+                    userEntries.append(result)
+                }
+            }
 
             // Apply our `overrides/` curation to upstream entries.
             let overrides = catokolasSource.overridesForUpstream
             let theirs = OverrideApplier.apply(
                 entries: theirsRaw, overrides: overrides)
 
-            // Catokolas wins on name collisions — we publish a couple of
-            // Spoons (e.g. MoveSpaces) that also exist upstream, and the
-            // catalog dictionary later keys by name.
-            let oursNames = Set(ours.map { $0.name })
-            let combined = (ours + theirs.filter { !oursNames.contains($0.name) })
-                .sorted {
-                    $0.name.localizedCompare($1.name) == .orderedAscending
+            // Catokolas wins on name collisions; then user catalogs in
+            // user-added order; upstream loses to all of the above.
+            // We publish a couple of Spoons (e.g. MoveSpaces) that also
+            // exist upstream, and the catalog dictionary later keys by
+            // name.
+            var seen = Set(ours.map { $0.name })
+            var combined: [SpoonCatalogEntry] = ours
+            for batch in userEntries {
+                for entry in batch where !seen.contains(entry.name) {
+                    combined.append(entry)
+                    seen.insert(entry.name)
                 }
+            }
+            for entry in theirs where !seen.contains(entry.name) {
+                combined.append(entry)
+                seen.insert(entry.name)
+            }
+            combined.sort {
+                $0.name.localizedCompare($1.name) == .orderedAscending
+            }
             self.entries = combined
             catalogCache.update(Dictionary(
                 uniqueKeysWithValues: combined.map { ($0.name, $0) }))

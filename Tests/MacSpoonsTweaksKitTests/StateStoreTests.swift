@@ -162,6 +162,42 @@ struct StateStoreTests {
     }
 
     @Test
+    func customCatalogsRoundTripAndDefaultToEmpty() throws {
+        // Legacy state.json has no customCatalogs key → empty array;
+        // round-trip preserves the entries we wrote.
+        let pathOld = tmpPath()
+        try """
+        {
+          "schemaVersion": 1,
+          "lastCatalogFetch": {},
+          "catalogETags": {},
+          "spoons": {}
+        }
+        """.write(to: pathOld, atomically: true, encoding: .utf8)
+        let oldState = try StateStore(path: pathOld).load()
+        #expect(oldState.customCatalogs.isEmpty)
+
+        let pathNew = tmpPath()
+        let store   = StateStore(path: pathNew)
+        try store.save(AppState(customCatalogs: [
+            CustomCatalogConfig(
+                owner: "alice", repo: "spoons-curated",
+                branch: "main", description: "Alice's picks",
+                enabled: true),
+            CustomCatalogConfig(
+                owner: "bob",   repo: "more-spoons",
+                branch: "next", description: nil,
+                enabled: false),
+        ]))
+        let reloaded = try store.load()
+        #expect(reloaded.customCatalogs.count == 2)
+        #expect(reloaded.customCatalogs[0].id == "alice/spoons-curated")
+        #expect(reloaded.customCatalogs[0].description == "Alice's picks")
+        #expect(reloaded.customCatalogs[1].enabled == false)
+        #expect(reloaded.customCatalogs[1].branch == "next")
+    }
+
+    @Test
     func nativeModulesRoundTripsAndDefaultsToEmpty() throws {
         // Legacy state.json without nativeModules → empty map; new
         // state with entries → round-trips back as written.

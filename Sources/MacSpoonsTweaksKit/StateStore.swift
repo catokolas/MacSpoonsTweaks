@@ -18,23 +18,30 @@ public struct AppState: Codable, Equatable, Sendable {
     /// before this field existed.
     public var nativeModules:    [String: NativeModuleState]
 
+    /// User-added Spoon catalogs beyond the built-in catokolas + official
+    /// pair. Order is preserved so the user controls precedence in the
+    /// sidebar merge. Defaults to `[]` for older state files.
+    public var customCatalogs:   [CustomCatalogConfig]
+
     public init(
         schemaVersion: Int = 1,
         lastCatalogFetch: [String: Date] = [:],
         catalogETags:     [String: String] = [:],
         spoons:           [String: SpoonState] = [:],
-        nativeModules:    [String: NativeModuleState] = [:]
+        nativeModules:    [String: NativeModuleState] = [:],
+        customCatalogs:   [CustomCatalogConfig] = []
     ) {
         self.schemaVersion    = schemaVersion
         self.lastCatalogFetch = lastCatalogFetch
         self.catalogETags     = catalogETags
         self.spoons           = spoons
         self.nativeModules    = nativeModules
+        self.customCatalogs   = customCatalogs
     }
 
     private enum CodingKeys: String, CodingKey {
         case schemaVersion, lastCatalogFetch, catalogETags, spoons
-        case nativeModules
+        case nativeModules, customCatalogs
     }
 
     public init(from decoder: Decoder) throws {
@@ -48,6 +55,40 @@ public struct AppState: Codable, Equatable, Sendable {
             [String: SpoonState].self, forKey: .spoons)
         self.nativeModules    = try c.decodeIfPresent(
             [String: NativeModuleState].self, forKey: .nativeModules) ?? [:]
+        self.customCatalogs   = try c.decodeIfPresent(
+            [CustomCatalogConfig].self, forKey: .customCatalogs) ?? []
+    }
+}
+
+/// User-added Spoon catalog descriptor. Each entry expands to a
+/// `UserCatalogSource` that fetches a `SpoonsCatalog`-shape JSON from a
+/// GitHub repo at
+/// `https://raw.githubusercontent.com/<owner>/<repo>/<branch>/spoons.json`.
+/// The same repo is registered with SpoonInstall as a `RepoRef.custom`
+/// so users can install Spoons from it.
+public struct CustomCatalogConfig: Codable, Equatable, Sendable {
+    public var owner:       String
+    public var repo:        String
+    public var branch:      String
+    public var description: String?
+    public var enabled:     Bool
+
+    /// Stable identifier — `"owner/repo"`. Used as the source ID
+    /// (prefixed with `"user:"`) and as the SpoonInstall repo name.
+    public var id: String { "\(owner)/\(repo)" }
+
+    public init(
+        owner: String,
+        repo: String,
+        branch: String = "main",
+        description: String? = nil,
+        enabled: Bool = true
+    ) {
+        self.owner       = owner
+        self.repo        = repo
+        self.branch      = branch
+        self.description = description
+        self.enabled     = enabled
     }
 }
 

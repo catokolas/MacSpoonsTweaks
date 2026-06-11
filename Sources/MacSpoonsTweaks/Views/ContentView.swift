@@ -7,6 +7,7 @@ struct ContentView: View {
     @State private var searchText:   String        = ""
     @State private var sourceFilter: SourceFilter  = .all
     @State private var diagnosticsShown: Bool       = false
+    @State private var catalogsShown:    Bool       = false
 
     enum SourceFilter: String, CaseIterable, Identifiable {
         case all      = "All"
@@ -38,6 +39,9 @@ struct ContentView: View {
         .task { catalog.refreshInitLuaPatchState() }
         .sheet(isPresented: $diagnosticsShown) {
             DiagnosticsView()
+        }
+        .sheet(isPresented: $catalogsShown) {
+            ManageCatalogsView()
         }
     }
 
@@ -106,6 +110,14 @@ struct ContentView: View {
                 .buttonStyle(.plain)
                 .help("Check upstream for updates")
                 .disabled(catalog.isCheckingForUpdates)
+                Button {
+                    catalogsShown = true
+                } label: {
+                    Image(systemName: "folder.badge.gearshape")
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help("Manage catalogs…")
                 Button {
                     diagnosticsShown = true
                 } label: {
