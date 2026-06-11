@@ -122,7 +122,8 @@ final class SpoonCatalogModel: ObservableObject {
     let installer:        SpoonInstaller
     let moduleInstaller:  NativeModuleInstaller
     let initLuaPatcher: InitLuaPatcher
-    let updateChecker:  any UpdateChecker
+    let updateChecker:     any UpdateChecker
+    let changelogProvider: any SpoonChangelogProvider
 
     /// State machine for the init.lua require-line patch banner.
     @Published private(set) var initLuaPatchState: InitLuaPatchState = .checking
@@ -226,11 +227,21 @@ final class SpoonCatalogModel: ObservableObject {
         // upstream. Skip the git checker when git isn't available;
         // git strategies just don't resolve in that case.
         var checkers: [any UpdateChecker] = []
+        var changelogProviders: [any SpoonChangelogProvider] = []
         if let git = try? SystemGitRunner() {
             checkers.append(GitUpdateChecker(runner: git))
+            // Same git binary feeds the change-preview provider for
+            // catokolas + user catalogs.
+            changelogProviders.append(
+                GitSpoonChangelogProvider(runner: git))
         }
         checkers.append(ZipETagUpdateChecker())
+        // Upstream change preview hits GitHub's Commits API. Best
+        // effort — degrades to "no preview" if there's no network.
+        changelogProviders.append(UpstreamCommitsAPIChangelogProvider())
         self.updateChecker = CompositeUpdateChecker(checkers)
+        self.changelogProvider = CompositeSpoonChangelogProvider(
+            changelogProviders)
 
         // Wire the recorder to publish each invocation through the
         // model so DiagnosticsView re-renders. Doing this AFTER all
@@ -591,6 +602,34 @@ final class SpoonCatalogModel: ObservableObject {
         return InstalledRef.updateAvailable(
             installed: state.spoons[entry.name]?.installedRef,
             latest:    latestRefs[entry.name])
+    }
+
+    /// View-friendly snapshot of an entry's installed ref. The sheet
+    /// uses this to render "From <short> → <short>".
+    func installedRefSnapshot(
+        for entry: SpoonCatalogEntry
+    ) -> InstalledRef? {
+        _ = installSeq
+        let state = (try? stateStore.load()) ?? AppState()
+        return state.spoons[entry.name]?.installedRef
+    }
+
+    /// Build the "what's changed?" preview for a Spoon. Looks up its
+    /// installed and latest refs, routes through the strategy, and
+    /// asks the composite provider. Surface errors as-is — the sheet
+    /// is the only consumer.
+    func changelog(
+        for entry: SpoonCatalogEntry
+    ) async throws -> SpoonChangelog {
+        guard let strategy = strategy(for: entry) else {
+            throw SpoonChangelogError.unsupportedStrategy
+        }
+        let state = (try? stateStore.load()) ?? AppState()
+        let installed = state.spoons[entry.name]?.installedRef
+        let latest    = latestRefs[entry.name]
+        return try await changelogProvider.changelog(
+            for: entry, strategy: strategy,
+            installed: installed, latest: latest)
     }
 
     /// Check every installed Spoon for an upstream update, in parallel.

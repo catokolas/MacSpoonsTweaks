@@ -22,6 +22,7 @@ struct SpoonDetailView: View {
     @State private var applyMessage: String? = nil
 
     @State private var installState: InstallActionState = .idle
+    @State private var changesShown: Bool                = false
     @State private var installMessage: String? = nil
 
     enum ApplyState: Equatable {
@@ -70,6 +71,11 @@ struct SpoonDetailView: View {
         // Seed on first appear and whenever the user switches Spoons.
         .onAppear { seedFromState() }
         .onChange(of: entry.id) { _, _ in seedFromState() }
+        .sheet(isPresented: $changesShown) {
+            WhatsChangedSheet(entry: entry) {
+                Task { await installNow() }
+            }
+        }
     }
 
     private func seedFromState() {
@@ -180,6 +186,9 @@ struct SpoonDetailView: View {
                     Button("Update") { Task { await installNow() } }
                         .buttonStyle(.borderedProminent)
                         .tint(.orange)
+                    Button("View changes") { changesShown = true }
+                        .buttonStyle(.bordered)
+                        .help("Preview the commits between your installed version and the latest before updating.")
                 }
                 Button("Remove") { Task { await removeNow() } }
                     .tint(.red)
