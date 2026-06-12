@@ -11,6 +11,8 @@ Browse, install, and configure
 format — through typed forms and a menu bar shortcut, without
 hand-editing `~/.hammerspoon/init.lua`.
 
+![MacSpoonsTweaks — sidebar listing every Spoon, detail view editing a selected one](app-example.png)
+
 Pairs naturally with
 [`catokolas/HS_SpoonsContrib`](https://github.com/catokolas/HS_SpoonsContrib)
 (curated Spoons + optional native helpers) and the official
