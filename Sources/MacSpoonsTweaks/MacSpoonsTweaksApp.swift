@@ -184,6 +184,12 @@ final class SpoonCatalogModel: ObservableObject {
 
     private var hasLoaded = false
 
+    /// Poll-based watcher for the chord-driven runtime override file.
+    /// Cancelled on deinit. Polls every ~750 ms via DispatchSourceTimer
+    /// because kqueue file events are flaky for the in-place rewrite
+    /// pattern Lua's `io.open(path, "w")` uses.
+    private var overridesWatcher: DispatchSourceTimer?
+
     init() {
         let status = HammerspoonEnvironment().snapshot()
         self.status = status
@@ -282,6 +288,61 @@ final class SpoonCatalogModel: ObservableObject {
         rebuildReposCache()
         let bootState = (try? stateStore.load()) ?? AppState()
         self.fontSize = bootState.fontSize
+
+        // Reconcile chord-driven deactivations from any prior session,
+        // then attach a FS watcher so live chord presses update the UI
+        // and rewrite the snippet without the user touching the app.
+        // ensureExists() makes the file present even when no chord has
+        // fired yet, so the watcher attaches reliably at launch.
+        try? orchestrator.runtimeOverrides.ensureExists()
+        reconcileRuntimeOverrides()
+        startRuntimeOverridesWatcher()
+    }
+
+    deinit {
+        overridesWatcher?.cancel()
+    }
+
+    // MARK: - Runtime overrides (chord-driven on/off)
+
+    /// Compare the on-disk override file against `state.spoons[*].paused`
+    /// and reconcile any drift. Chord-driven deactivation always wins —
+    /// the override file is the most recent intent the user expressed.
+    /// Regenerates the snippet + bumps `installSeq` only when state
+    /// actually changed (no-op when watcher fires on our own writes).
+    @MainActor
+    func reconcileRuntimeOverrides() {
+        let deactivated = orchestrator.runtimeOverrides.read()
+        var changed = false
+        do {
+            try stateStore.update { state in
+                for (name, var s) in state.spoons {
+                    guard s.enabled else { continue }
+                    let shouldBePaused = deactivated.contains(name)
+                    if s.paused != shouldBePaused {
+                        s.paused = shouldBePaused
+                        state.spoons[name] = s
+                        changed = true
+                    }
+                }
+            }
+        } catch { return }
+        if changed {
+            try? orchestrator.regenerateSnippet()
+            installSeq += 1
+        }
+    }
+
+    /// Start (or replace) the poll-based watcher on the override file.
+    /// Each tick the watcher hashes (size + mtime) the file and reruns
+    /// reconcile whenever it changes — picking up chord-driven writes
+    /// from Hammerspoon within ~1 s of them landing on disk.
+    private func startRuntimeOverridesWatcher() {
+        overridesWatcher?.cancel()
+        overridesWatcher = orchestrator.runtimeOverrides.startPolling {
+            [weak self] in
+            self?.reconcileRuntimeOverrides()
+        }
     }
 
     // MARK: - Custom catalogs
@@ -488,19 +549,18 @@ final class SpoonCatalogModel: ObservableObject {
             installedRef: placeholderRef(for: entry.sourceID))
 
         // Auto-activate so the Spoon is usable immediately: flip
-        // enabled, write the snippet, push live. Fresh installs get
-        // the manifest's default hotkeys; reinstalls preserve whatever
-        // overrides the user already set. Best-effort — a live-apply
-        // failure (no Hammerspoon running, missing permissions) does
-        // not unwind the on-disk install.
+        // enabled, write the snippet, push live. Reinstalls preserve
+        // user overrides; fresh installs pass empty maps and let the
+        // snippet / live-bind paths resolve manifest defaults — that
+        // way a future manifest default change propagates without
+        // needing to re-persist. Best-effort — a live-apply failure
+        // (no Hammerspoon running, missing permissions) does not
+        // unwind the on-disk install.
         let seed = orchestrator.seedState(for: entry.name)
-        let hotkeys = seed.hotkeys.isEmpty
-            ? HotkeyAction.defaults(from: entry.hotkeys)
-            : seed.hotkeys
         _ = try? await orchestrator.apply(
             entry:           entry,
             values:          seed.config,
-            hotkeyOverrides: hotkeys)
+            hotkeyOverrides: seed.hotkeys)
 
         installSeq += 1
         recomputeHotkeyConflicts()

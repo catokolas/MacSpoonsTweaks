@@ -254,6 +254,186 @@ struct SnippetGeneratorTests {
     }
 
     @Test
+    func manifestHotkeyDefaultsRenderEvenWithoutUserOverrides() {
+        // Regression: when state.hotkeys is empty but the manifest
+        // declared a `default` for an action, the snippet must still
+        // emit `hotkeys = { ... }` so SpoonInstall:andUse binds it.
+        // Without this, `spoon.X:bindHotkeys` is never called and the
+        // chord doesn't fire — exactly the bug a pre-v0.2.0 install
+        // hits after upgrading.
+        let entry = entry(
+            "FocusFollowsMouse",
+            hasConfigure: true,
+            hasStart: true,
+            hotkeyDefaults: [("toggle",
+                HotkeyBinding(mods: ["shift", "ctrl", "cmd"], key: "f"))])
+        var state = AppState()
+        state.spoons["FocusFollowsMouse"] = SpoonState(
+            sourceID: "catokolas",
+            enabled: true,
+            installedRef: .gitCommit("abc"))
+        let snippet = SnippetGenerator.generate(
+            state: state,
+            catalog: ["FocusFollowsMouse": entry],
+            repos: ["catokolas": catokolasRepo],
+            timestamp: fixedDate)
+        #expect(snippet.contains(
+            "hotkeys = { toggle = { { \"shift\", \"ctrl\", \"cmd\" }, \"f\" } },"))
+    }
+
+    @Test
+    func userOverrideWinsOverManifestDefault() {
+        // If the user recorded an explicit override, the resolve step
+        // must not silently overwrite it with the manifest default.
+        let entry = entry(
+            "FocusFollowsMouse",
+            hasConfigure: true,
+            hasStart: true,
+            hotkeyDefaults: [("toggle",
+                HotkeyBinding(mods: ["shift", "ctrl", "cmd"], key: "f"))])
+        var state = AppState()
+        state.spoons["FocusFollowsMouse"] = SpoonState(
+            sourceID: "catokolas",
+            enabled: true,
+            installedRef: .gitCommit("abc"),
+            hotkeys: [
+                "toggle": HotkeyBinding(mods: ["cmd"], key: "g"),
+            ])
+        let snippet = SnippetGenerator.generate(
+            state: state,
+            catalog: ["FocusFollowsMouse": entry],
+            repos: ["catokolas": catokolasRepo],
+            timestamp: fixedDate)
+        #expect(snippet.contains(
+            "hotkeys = { toggle = { { \"cmd\" }, \"g\" } },"))
+        #expect(!snippet.contains("\"f\" }"))
+    }
+
+    // MARK: - Activate hotkey
+
+    @Test
+    func activateHotkeyEmitsBindBlockAndSkipsAndUseHotkeys() {
+        // Spoon with an activateHotkey: snippet must NOT emit
+        // `hotkeys = { … }` in the andUse block (SpoonInstall doesn't
+        // own the chord any more) AND must emit a `hs.hotkey.bind`
+        // block that closes over `mstActive` + alert + override
+        // persistence.
+        var e = entry("FocusFollowsMouse",
+                      hasConfigure: true, hasStart: true,
+                      hotkeyActions: [])
+        e.activateHotkey = HotkeyBinding(
+            mods: ["shift", "ctrl", "cmd"], key: "f")
+        var state = AppState()
+        state.spoons["FocusFollowsMouse"] = SpoonState(
+            sourceID: "catokolas", enabled: true,
+            installedRef: .gitCommit("abc"))
+        let snippet = SnippetGenerator.generate(
+            state: state,
+            catalog: ["FocusFollowsMouse": e],
+            repos: ["catokolas": catokolasRepo],
+            timestamp: fixedDate)
+        // No hotkeys = block in the andUse.
+        let andUseRange = snippet.range(of: ":andUse(\"FocusFollowsMouse\"")!
+        let afterAndUse = snippet[andUseRange.lowerBound...]
+        let andUseEnd = afterAndUse.range(of: "})")!.upperBound
+        let andUseBody = afterAndUse[..<andUseEnd]
+        #expect(!andUseBody.contains("hotkeys = "))
+        // The activate-hotkey block follows.
+        #expect(snippet.contains("-- Activate hotkey: FocusFollowsMouse"))
+        #expect(snippet.contains(
+            "hs.hotkey.bind({ \"shift\", \"ctrl\", \"cmd\" }, \"f\""))
+        #expect(snippet.contains("mstActive[\"FocusFollowsMouse\"] = true"))
+        #expect(snippet.contains("mstSetOverride"))
+        #expect(snippet.contains("hs.alert.show"))
+        // Plus the runtime-override applier at the bottom.
+        #expect(snippet.contains("mac_spoons_tweaks_overrides.lua"))
+        #expect(snippet.contains("hs.timer.doAfter"))
+    }
+
+    @Test
+    func activateHotkeyHonoursUserOverride() {
+        // state.activateHotkeyOverride wins over manifest default.
+        var e = entry("FocusFollowsMouse",
+                      hasConfigure: true, hasStart: true,
+                      hotkeyActions: [])
+        e.activateHotkey = HotkeyBinding(
+            mods: ["shift", "ctrl", "cmd"], key: "f")
+        var state = AppState()
+        state.spoons["FocusFollowsMouse"] = SpoonState(
+            sourceID: "catokolas", enabled: true,
+            installedRef: .gitCommit("abc"),
+            activateHotkeyOverride: HotkeyBinding(
+                mods: ["alt"], key: "g"))
+        let snippet = SnippetGenerator.generate(
+            state: state,
+            catalog: ["FocusFollowsMouse": e],
+            repos: ["catokolas": catokolasRepo],
+            timestamp: fixedDate)
+        #expect(snippet.contains(
+            "hs.hotkey.bind({ \"alt\" }, \"g\""))
+        // Manifest default never appears.
+        #expect(!snippet.contains(
+            "hs.hotkey.bind({ \"shift\", \"ctrl\", \"cmd\" }, \"f\""))
+    }
+
+    @Test
+    func activateHotkeyPausedSpoonStartsInactive() {
+        // When state.paused is true, mstActive should initialise to
+        // false so the next chord press starts the Spoon rather than
+        // shouting "OFF" at it.
+        var e = entry("MouseScrollTweaks",
+                      hasConfigure: true, hasStart: true,
+                      hotkeyActions: [])
+        e.activateHotkey = HotkeyBinding(
+            mods: ["shift", "ctrl", "cmd"], key: "s")
+        var state = AppState()
+        state.spoons["MouseScrollTweaks"] = SpoonState(
+            sourceID: "catokolas", enabled: true, paused: true,
+            installedRef: .gitCommit("abc"))
+        let snippet = SnippetGenerator.generate(
+            state: state,
+            catalog: ["MouseScrollTweaks": e],
+            repos: ["catokolas": catokolasRepo],
+            timestamp: fixedDate)
+        #expect(snippet.contains("mstActive[\"MouseScrollTweaks\"] = false"))
+        // Also: no `start = true` for paused Spoons.
+        let andUseRange = snippet.range(of: ":andUse(\"MouseScrollTweaks\"")!
+        let afterAndUse = snippet[andUseRange.lowerBound...]
+        let andUseEnd = afterAndUse.range(of: "})")!.upperBound
+        let andUseBody = afterAndUse[..<andUseEnd]
+        #expect(!andUseBody.contains("start = true"))
+    }
+
+    @Test
+    func snippetWithoutActivateHotkeyOmitsHelpers() {
+        // MoveSpaces (no activateHotkey, but has hotkeys[]) should NOT
+        // get an activate-hotkey block or the deferred override loader.
+        let e = entry("MoveSpaces",
+                      hasConfigure: false, hasStart: false,
+                      hotkeyDefaults: [
+                        ("space_left", HotkeyBinding(
+                            mods: ["shift", "ctrl"], key: "left")),
+                        ("space_right", HotkeyBinding(
+                            mods: ["shift", "ctrl"], key: "right"))])
+        var state = AppState()
+        state.spoons["MoveSpaces"] = SpoonState(
+            sourceID: "catokolas", enabled: true,
+            installedRef: .gitCommit("abc"))
+        let snippet = SnippetGenerator.generate(
+            state: state,
+            catalog: ["MoveSpaces": e],
+            repos: ["catokolas": catokolasRepo],
+            timestamp: fixedDate)
+        // MoveSpaces gets its per-action hotkeys via andUse.
+        #expect(snippet.contains("hotkeys = { space_left"))
+        // But no activate-hotkey block.
+        #expect(!snippet.contains("-- Activate hotkey:"))
+        // Helpers are unconditional (one block at the top) — they're
+        // emitted but harmless when no Spoon uses them.
+        #expect(snippet.contains("mstAlertStyle"))
+    }
+
+    @Test
     func spoonsAreSortedByName() {
         // Stable diffs when the user enables/disables Spoons in any
         // order. Output ordering must come from name sort, not state
@@ -337,6 +517,33 @@ struct SnippetGeneratorTests {
             config: [],
             hotkeys: hotkeyActions.map { action in
                 HotkeyAction(action: action, label: nil, default: nil)
+            },
+            provenance: .manifest)
+    }
+
+    /// Variant that lets tests give actions an authored `default`.
+    /// Used by the manifest-default fallback tests; the no-default
+    /// helper above stays minimal for older tests. Different argument
+    /// label so neither overload becomes ambiguous when the caller
+    /// omits `hotkeyActions`.
+    private func entry(
+        _ name: String,
+        hasConfigure: Bool = true,
+        hasStart: Bool = true,
+        hotkeyDefaults: [(String, HotkeyBinding?)]
+    ) -> SpoonCatalogEntry {
+        return SpoonCatalogEntry(
+            id: "test:\(name)",
+            name: name,
+            sourceID: "catokolas",
+            metadata: SpoonMetadata(version: "0.1", description: nil,
+                                    author: nil, homepage: nil, license: nil),
+            lifecycle: Lifecycle(
+                hasStart: hasStart, hasStop: true, hasToggle: false,
+                hasConfigure: hasConfigure, eventDriven: false),
+            config: [],
+            hotkeys: hotkeyDefaults.map { (action, def) in
+                HotkeyAction(action: action, label: nil, default: def)
             },
             provenance: .manifest)
     }

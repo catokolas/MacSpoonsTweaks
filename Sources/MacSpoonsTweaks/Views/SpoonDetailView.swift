@@ -17,6 +17,7 @@ struct SpoonDetailView: View {
     /// User-recorded hotkey overrides, keyed by HotkeyAction.action.
     /// Absent → use manifest default.
     @State private var hotkeyOverrides: [String: HotkeyBinding] = [:]
+    @State private var activateHotkeyOverride: HotkeyBinding? = nil
 
     @State private var applyState: ApplyState = .idle
     @State private var applyMessage: String? = nil
@@ -81,12 +82,12 @@ struct SpoonDetailView: View {
     }
 
     private func seedFromState() {
-        let (config, hotkeys) =
-            catalog.orchestrator.seedState(for: entry.name)
-        values          = config
-        hotkeyOverrides = hotkeys
-        applyState      = .idle
-        applyMessage    = nil
+        let seed = catalog.orchestrator.seedState(for: entry.name)
+        values                  = seed.config
+        hotkeyOverrides         = seed.hotkeys
+        activateHotkeyOverride  = seed.activateHotkeyOverride
+        applyState              = .idle
+        applyMessage            = nil
     }
 
     // MARK: - Sections
@@ -338,12 +339,15 @@ struct SpoonDetailView: View {
             applyStatusLine
             HStack {
                 Button("Reset to defaults") {
-                    values = [:]
-                    hotkeyOverrides = [:]
-                    applyState   = .idle
-                    applyMessage = nil
+                    values                  = [:]
+                    hotkeyOverrides         = [:]
+                    activateHotkeyOverride  = nil
+                    applyState              = .idle
+                    applyMessage            = nil
                 }
-                .disabled(values.isEmpty && hotkeyOverrides.isEmpty
+                .disabled(values.isEmpty
+                          && hotkeyOverrides.isEmpty
+                          && activateHotkeyOverride == nil
                           || applyState == .inFlight)
                 if catalog.isInstalled(entry) {
                     let active   = catalog.isActive(entry)
@@ -363,6 +367,24 @@ struct SpoonDetailView: View {
                           : (active
                              ? "Spoon is enabled in the snippet. Toggle off to remove its andUse block on the next reload."
                              : "Spoon is disabled — no andUse block emitted. Toggle on to add it back."))
+                    // Activate-hotkey recorder — only for Spoons whose
+                    // manifest declares one. Compact so it sits tight
+                    // to the Active toggle (no label / no leading
+                    // Spacer). Click Apply to commit.
+                    if entry.activateHotkey != nil {
+                        Text("Toggle on/off:")
+                            .scaledFont(.caption)
+                            .foregroundStyle(.secondary)
+                            .help("Press this chord to flip Active. "
+                                + "The change persists across "
+                                + "Hammerspoon reloads.")
+                        HotkeyRecorderField(
+                            actionLabel: "Activate",
+                            default: entry.activateHotkey,
+                            binding: $activateHotkeyOverride,
+                            compact: true)
+                            .disabled(applyState == .inFlight)
+                    }
                 }
                 Spacer()
                 Button {
@@ -431,9 +453,10 @@ struct SpoonDetailView: View {
         applyMessage = nil
         do {
             let result = try await catalog.orchestrator.apply(
-                entry:           entry,
-                values:          values,
-                hotkeyOverrides: hotkeyOverrides)
+                entry:                  entry,
+                values:                 values,
+                hotkeyOverrides:        hotkeyOverrides,
+                activateHotkeyOverride: activateHotkeyOverride)
             // Apply may have changed effective bindings — re-check
             // for conflicts so the sidebar chip and per-row warning
             // both reflect the new state.

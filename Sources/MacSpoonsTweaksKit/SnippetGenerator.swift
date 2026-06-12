@@ -61,6 +61,12 @@ public enum SnippetGenerator {
         out.append("spoon.SpoonInstall.use_syncinstall = false")
         out.append("")
 
+        // Activate-hotkey support: alert style + on/off-state table +
+        // override-file helpers. Emit once near the top; per-Spoon
+        // `hs.hotkey.bind` blocks below close over these.
+        out.append(activateHotkeyHelpers)
+        out.append("")
+
         // Filter to Spoons we'll actually emit so the repo-registration
         // section only covers sources that have a live entry below.
         // We emit `andUse` for every enabled Spoon regardless of
@@ -108,6 +114,33 @@ public enum SnippetGenerator {
             out.append("")
         }
 
+        // Activate-hotkey bind blocks for the Spoons that carry an
+        // `activateHotkey` in the manifest (or a user override). Grouped
+        // after every `andUse` block so the `spoon.X` global definitely
+        // exists by the time the bind body runs.
+        let withActivate = emittable.filter { _, s, entry in
+            resolvedActivateHotkey(state: s, entry: entry) != nil
+        }
+        if !withActivate.isEmpty {
+            out.append("-- Activate hotkeys (toggle Spoon on/off + persist + alert)")
+            for (name, s, entry) in withActivate {
+                if let chord = resolvedActivateHotkey(state: s, entry: entry) {
+                    out.append(renderActivateHotkey(
+                        name: name, chord: chord, paused: s.paused))
+                    out.append("")
+                }
+            }
+        }
+
+        // Apply chord-driven runtime overrides after all `andUse` blocks
+        // have had a chance to bring the Spoon instances into existence.
+        // `hs.timer.doAfter` defers past the synchronous load phase
+        // without us having to reason about andUse's async install path.
+        if !withActivate.isEmpty {
+            out.append(applyRuntimeOverridesBlock)
+            out.append("")
+        }
+
         return out.joined(separator: "\n")
     }
 
@@ -139,8 +172,21 @@ public enum SnippetGenerator {
             }
         }
 
-        if !state.hotkeys.isEmpty {
-            fields.append("  hotkeys = \(encodeHotkeys(state.hotkeys)),")
+        // Resolve hotkeys at render time so a Spoon with manifest
+        // defaults still gets a `hotkeys = …` block when the user
+        // hasn't recorded any overrides. User overrides win per-action.
+        // SKIPPED when the Spoon has an `activateHotkey` — those chords
+        // are bound separately below via our own `hs.hotkey.bind` (so
+        // we can run start/stop, persist, and show an alert in the
+        // callback, none of which SpoonInstall's per-action wiring
+        // supports).
+        if entry.activateHotkey == nil
+            && state.activateHotkeyOverride == nil {
+            let resolvedHotkeys = HotkeyAction.resolved(
+                state: state.hotkeys, manifest: entry.hotkeys)
+            if !resolvedHotkeys.isEmpty {
+                fields.append("  hotkeys = \(encodeHotkeys(resolvedHotkeys)),")
+            }
         }
 
         // Omit `start = true` for paused Spoons. The `andUse` block
@@ -171,6 +217,109 @@ public enum SnippetGenerator {
         }
         return "{ " + entries.joined(separator: ", ") + " }"
     }
+
+    // MARK: - Activate hotkey
+
+    /// User override (state) wins; manifest default is the fallback.
+    /// Nil for Spoons that ship no activate chord (MoveSpaces,
+    /// SpotifyPlayPause) and have no user override either.
+    private static func resolvedActivateHotkey(
+        state: SpoonState, entry: SpoonCatalogEntry
+    ) -> HotkeyBinding? {
+        return state.activateHotkeyOverride ?? entry.activateHotkey
+    }
+
+    /// `do … end` block: closure-local initial-active flag (mirrors
+    /// `start = true` minus paused), a `hs.hotkey.bind` whose callback
+    /// flips the flag, calls `:start`/`:stop` on the Spoon, persists
+    /// the new state to the override file via `mstSetOverride`, and
+    /// flashes an `hs.alert`.
+    private static func renderActivateHotkey(
+        name: String, chord: HotkeyBinding, paused: Bool
+    ) -> String {
+        let mods = LuaLiteral.encode(.stringList(chord.mods))
+        let key  = LuaLiteral.encodeString(chord.key)
+        let initial = paused ? "false" : "true"
+        var lines: [String] = []
+        lines.append("-- Activate hotkey: \(name)")
+        lines.append("do")
+        lines.append("  mstActive[\(LuaLiteral.encodeString(name))] = \(initial)")
+        lines.append("  hs.hotkey.bind(\(mods), \(key), function()")
+        lines.append("    local n = \(LuaLiteral.encodeString(name))")
+        lines.append("    mstActive[n] = not mstActive[n]")
+        lines.append("    if mstActive[n] then")
+        lines.append("      if spoon[n] and spoon[n].start then pcall(function() spoon[n]:start() end) end")
+        lines.append("      mstSetOverride(n, false)")
+        lines.append("      hs.alert.show(n .. \": ON\", mstAlertStyle, 1.0)")
+        lines.append("    else")
+        lines.append("      if spoon[n] and spoon[n].stop  then pcall(function() spoon[n]:stop()  end) end")
+        lines.append("      mstSetOverride(n, true)")
+        lines.append("      hs.alert.show(n .. \": OFF\", mstAlertStyle, 1.0)")
+        lines.append("    end")
+        lines.append("  end)")
+        lines.append("end")
+        return lines.joined(separator: "\n")
+    }
+
+    /// Helpers block emitted once near the top of the snippet. Defines
+    /// the shared alert style, the `mstActive` flag table, and the
+    /// override-file read/write helpers used by every activate-hotkey
+    /// callback.
+    private static let activateHotkeyHelpers: String = """
+    -- MacSpoonsTweaks: activate-hotkey helpers (alert + persistence)
+    local mstAlertStyle = {
+      textSize = 24, textColor = { white = 1, alpha = 1 },
+      fillColor = { white = 0.05, alpha = 0.85 },
+      strokeWidth = 0, radius = 12, atScreenEdge = 0,
+      fadeInDuration = 0.1, fadeOutDuration = 0.4,
+    }
+    local mstOverridesPath = (os.getenv("HOME") or "")
+      .. "/.hammerspoon/mac_spoons_tweaks_overrides.lua"
+    mstActive = mstActive or {}
+    local function mstReadOverrides()
+      local ok, t = pcall(dofile, mstOverridesPath)
+      if ok and type(t) == "table" then return t end
+      return {}
+    end
+    local function mstSetOverride(name, deactivated)
+      local t = mstReadOverrides()
+      if deactivated then t[name] = true else t[name] = nil end
+      local names = {}
+      for k in pairs(t) do names[#names+1] = k end
+      table.sort(names)
+      local f = io.open(mstOverridesPath, "w")
+      if not f then return end
+      f:write("-- mac_spoons_tweaks_overrides.lua - MANAGED FILE - DO NOT EDIT.\\n")
+      f:write("return {\\n")
+      for _, n in ipairs(names) do f:write("  " .. n .. " = true,\\n") end
+      f:write("}\\n")
+      f:close()
+    end
+    """
+
+    /// Runs after every `andUse` (deferred via `hs.timer.doAfter` to
+    /// clear SpoonInstall's async install/load phase). For every Spoon
+    /// listed in the override file, flips `mstActive` to false and
+    /// calls `:stop()` so chord-induced deactivations survive
+    /// `hs.reload()`.
+    private static let applyRuntimeOverridesBlock: String = """
+    -- Apply chord-driven runtime overrides (deactivations that survived
+    -- hs.reload()). Deferred so SpoonInstall finishes loading the
+    -- Spoons before we try to call :stop() on them.
+    hs.timer.doAfter(0.5, function()
+      local ok, t = pcall(dofile, (os.getenv("HOME") or "")
+        .. "/.hammerspoon/mac_spoons_tweaks_overrides.lua")
+      if not (ok and type(t) == "table") then return end
+      for name in pairs(t) do
+        if spoon[name] and spoon[name].stop then
+          pcall(function() spoon[name]:stop() end)
+        end
+        mstActive[name] = false
+      end
+    end)
+    """
+
+    // MARK: - Misc
 
     private static func iso8601(_ d: Date) -> String {
         let f = ISO8601DateFormatter()

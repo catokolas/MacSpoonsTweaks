@@ -117,19 +117,43 @@ struct ManifestDecodeTests {
     }
 
     @Test
-    func mouseTrackpadTweaksHotkeyActions() throws {
+    func mouseTrackpadTweaksHasNoLegacyHotkeysOnlyActivate() throws {
+        // The 0.3.0 refactor dropped per-action hotkeys (toggle,
+        // toggleInvertScroll, toggleMiddleClick) for Spoons with
+        // start/stop semantics; what survives is a single
+        // `activateHotkey` that MacSpoonsTweaks binds via its own
+        // hs.hotkey.bind block.
         let mtt = try spoon(named: "MouseTrackpadTweaks")
-        let actions = mtt.hotkeys.map(\.action).sorted()
-        #expect(actions == ["toggle", "toggleInvertScroll", "toggleMiddleClick"])
+        #expect(mtt.hotkeys.isEmpty)
+        #expect(mtt.activateHotkey ==
+            HotkeyBinding(mods: ["shift", "ctrl", "cmd"], key: "m"))
     }
 
     @Test
-    func moveSpacesNoConfigureAndPairedHotkeys() throws {
+    func focusFollowsMouseDecodesActivateHotkey() throws {
+        let ffm = try spoon(named: "FocusFollowsMouse")
+        #expect(ffm.activateHotkey ==
+            HotkeyBinding(mods: ["shift", "ctrl", "cmd"], key: "f"))
+        // Old per-action hotkeys are gone.
+        #expect(ffm.hotkeys.isEmpty)
+    }
+
+    @Test
+    func moveSpacesKeepsLegacyHotkeysAndHasNoActivateHotkey() throws {
+        // MoveSpaces' space_left / space_right are operations, not an
+        // on/off — they stay in the `hotkeys[]` table; no
+        // activateHotkey.
+        let ms = try spoon(named: "MoveSpaces")
+        #expect(ms.activateHotkey == nil)
+        let actions = ms.hotkeys.map(\.action).sorted()
+        #expect(actions == ["space_left", "space_right"])
+    }
+
+    @Test
+    func moveSpacesHasNoConfigureAndNoStartStop() throws {
         let ms = try spoon(named: "MoveSpaces")
         #expect(!ms.lifecycle.hasConfigure)
         #expect(!ms.lifecycle.hasStart)
-        let actions = ms.hotkeys.map(\.action).sorted()
-        #expect(actions == ["space_left", "space_right"])
     }
 
     @Test

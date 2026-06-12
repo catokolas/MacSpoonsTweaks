@@ -11,6 +11,11 @@ public struct SpoonCatalogEntry: Identifiable, Sendable {
     public var lifecycle: Lifecycle
     public var config:    [ConfigField]
     public var hotkeys:   [HotkeyAction]
+    /// Single "activate / deactivate" chord MacSpoonsTweaks binds via
+    /// `hs.hotkey.bind`. Nil for Spoons without on/off semantics
+    /// (MoveSpaces, SpotifyPlayPause) — those rely on `hotkeys[]`
+    /// (or no hotkeys at all).
+    public var activateHotkey: HotkeyBinding? = nil
     /// Companion native modules this Spoon opportunistically uses.
     /// Empty unless the manifest declared `optionalModules`. Surfaced
     /// in the detail view so the user can install / update them via

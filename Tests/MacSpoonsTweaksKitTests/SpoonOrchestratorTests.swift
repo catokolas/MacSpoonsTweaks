@@ -351,9 +351,10 @@ struct SpoonOrchestratorTests {
         defer { cleanup(env) }
         let orchestrator = makeOrchestrator(env: env,
                                             runner: RecordingLuaRunner())
-        let (config, hotkeys) = orchestrator.seedState(for: "Nobody")
-        #expect(config.isEmpty)
-        #expect(hotkeys.isEmpty)
+        let seed = orchestrator.seedState(for: "Nobody")
+        #expect(seed.config.isEmpty)
+        #expect(seed.hotkeys.isEmpty)
+        #expect(seed.activateHotkeyOverride == nil)
     }
 
     @Test
@@ -372,10 +373,9 @@ struct SpoonOrchestratorTests {
         }
         let orchestrator = makeOrchestrator(env: env,
                                             runner: RecordingLuaRunner())
-        let (config, hotkeys) =
-            orchestrator.seedState(for: "FocusFollowsMouse")
-        #expect(config["delay"] == .number(0.05))
-        #expect(hotkeys["toggle"]?.key == "f")
+        let seed = orchestrator.seedState(for: "FocusFollowsMouse")
+        #expect(seed.config["delay"] == .number(0.05))
+        #expect(seed.hotkeys["toggle"]?.key == "f")
     }
 
     // MARK: - Test environment

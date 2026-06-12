@@ -174,6 +174,12 @@ public struct SpoonState: Codable, Equatable, Sendable {
     /// User-supplied hotkey bindings, keyed by action name.
     public var hotkeys: [String: HotkeyBinding]
 
+    /// User's override of the manifest's `activateHotkey`. Nil means
+    /// "use the manifest default". Mirrors the per-action `hotkeys`
+    /// semantic: clearing the override falls back to the maintainer's
+    /// chord.
+    public var activateHotkeyOverride: HotkeyBinding?
+
     public init(
         sourceID: String,
         enabled: Bool = false,
@@ -181,22 +187,24 @@ public struct SpoonState: Codable, Equatable, Sendable {
         installedRef: InstalledRef? = nil,
         installedSchemaKeys: [String]? = nil,
         config: [String: ConfigValue] = [:],
-        hotkeys: [String: HotkeyBinding] = [:]
+        hotkeys: [String: HotkeyBinding] = [:],
+        activateHotkeyOverride: HotkeyBinding? = nil
     ) {
-        self.sourceID            = sourceID
-        self.enabled             = enabled
-        self.paused              = paused
-        self.installedRef        = installedRef
-        self.installedSchemaKeys = installedSchemaKeys
-        self.config              = config
-        self.hotkeys             = hotkeys
+        self.sourceID               = sourceID
+        self.enabled                = enabled
+        self.paused                 = paused
+        self.installedRef           = installedRef
+        self.installedSchemaKeys    = installedSchemaKeys
+        self.config                 = config
+        self.hotkeys                = hotkeys
+        self.activateHotkeyOverride = activateHotkeyOverride
     }
 
     // Custom decoder so `paused` defaults to false on pre-existing
     // `state.json` files written before the field existed.
     private enum CodingKeys: String, CodingKey {
         case sourceID, enabled, paused, installedRef
-        case installedSchemaKeys, config, hotkeys
+        case installedSchemaKeys, config, hotkeys, activateHotkeyOverride
     }
 
     public init(from decoder: Decoder) throws {
@@ -212,6 +220,8 @@ public struct SpoonState: Codable, Equatable, Sendable {
             [String: ConfigValue].self, forKey: .config)
         self.hotkeys = try c.decode(
             [String: HotkeyBinding].self, forKey: .hotkeys)
+        self.activateHotkeyOverride = try c.decodeIfPresent(
+            HotkeyBinding.self, forKey: .activateHotkeyOverride)
     }
 }
 

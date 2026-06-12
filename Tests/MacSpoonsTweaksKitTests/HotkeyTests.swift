@@ -148,4 +148,61 @@ struct HotkeyTests {
     func defaultsOnEmptyInputReturnsEmpty() {
         #expect(HotkeyAction.defaults(from: []).isEmpty)
     }
+
+    // MARK: - HotkeyAction.resolved
+
+    @Test
+    func resolvedFillsMissingActionsFromManifestDefaults() {
+        // The snippet generator's bug case — user has no overrides, so
+        // resolve must produce the manifest defaults for the hotkeys
+        // = {...} block to render at all.
+        let actions = try! JSONDecoder().decode(
+            [HotkeyAction].self, from: Data("""
+            [
+              {"action":"toggle", "default":{"mods":["cmd"],"key":"f"}}
+            ]
+            """.utf8))
+        let resolved = HotkeyAction.resolved(
+            state: [:], manifest: actions)
+        #expect(resolved == ["toggle":
+            HotkeyBinding(mods: ["cmd"], key: "f")])
+    }
+
+    @Test
+    func resolvedKeepsUserOverridesOverManifestDefaults() {
+        // User explicitly recorded a chord — must win over the
+        // manifest's authored default.
+        let actions = try! JSONDecoder().decode(
+            [HotkeyAction].self, from: Data("""
+            [
+              {"action":"toggle", "default":{"mods":["cmd"],"key":"f"}}
+            ]
+            """.utf8))
+        let state: [String: HotkeyBinding] = [
+            "toggle": HotkeyBinding(mods: ["shift", "alt"], key: "t"),
+        ]
+        let resolved = HotkeyAction.resolved(
+            state: state, manifest: actions)
+        #expect(resolved == ["toggle":
+            HotkeyBinding(mods: ["shift", "alt"], key: "t")])
+    }
+
+    @Test
+    func resolvedDoesNotInventBindingsForUndefaultedActions() {
+        // Actions without a manifest default and without a user
+        // override stay unbound. We never invent a key the maintainer
+        // didn't pick.
+        let actions = try! JSONDecoder().decode(
+            [HotkeyAction].self, from: Data("""
+            [
+              {"action":"toggle", "default":{"mods":["cmd"],"key":"f"}},
+              {"action":"reset",  "label":"Reset"}
+            ]
+            """.utf8))
+        let resolved = HotkeyAction.resolved(
+            state: [:], manifest: actions)
+        #expect(resolved.count == 1)
+        #expect(resolved["toggle"] != nil)
+        #expect(resolved["reset"]  == nil)
+    }
 }

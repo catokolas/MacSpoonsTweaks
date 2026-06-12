@@ -14,15 +14,22 @@ struct HotkeyRecorderField: View {
     let actionLabel: String
     let `default`: HotkeyBinding?
     @Binding var binding: HotkeyBinding?
+    /// Compact rendering for inline placement next to an adjacent
+    /// control (e.g. the Active toggle in the SpoonDetailView footer).
+    /// Skips the trailing label and the leading Spacer so the chip +
+    /// buttons stay tight to whatever sits next to them.
+    var compact: Bool = false
 
     @State private var recording: Bool = false
     @State private var monitor: Any?
 
     var body: some View {
-        HStack(spacing: 10) {
-            Text(actionLabel)
-                .scaledFont(.body)
-            Spacer()
+        HStack(spacing: compact ? 4 : 10) {
+            if !compact {
+                Text(actionLabel)
+                    .scaledFont(.body)
+                Spacer()
+            }
             chip
             recordButton
             clearButton

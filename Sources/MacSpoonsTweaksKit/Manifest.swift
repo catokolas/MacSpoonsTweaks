@@ -29,6 +29,13 @@ public struct SpoonManifest: Decodable, Identifiable, Sendable {
     public var config:    [ConfigField]
     public var hotkeys:   [HotkeyAction]
 
+    /// Single "activate / deactivate" chord MacSpoonsTweaks binds via
+    /// `hs.hotkey.bind` (not via `andUse({ hotkeys = … })`). Spoons with
+    /// meaningful `:start`/`:stop` semantics ship one; pure-operation
+    /// Spoons like MoveSpaces leave it nil and keep their per-action
+    /// `hotkeys[]` entries instead.
+    public var activateHotkey: HotkeyBinding?
+
     /// Companion native modules this Spoon opportunistically uses.
     /// Empty if the Spoon doesn't depend on any. Defaults to `[]` for
     /// manifests written before the field existed.
@@ -52,6 +59,7 @@ public struct SpoonManifest: Decodable, Identifiable, Sendable {
         lifecycle: Lifecycle,
         config:  [ConfigField] = [],
         hotkeys: [HotkeyAction] = [],
+        activateHotkey: HotkeyBinding? = nil,
         optionalModules: [OptionalModule] = [],
         knownIssues:     [KnownIssue]     = []
     ) {
@@ -65,14 +73,15 @@ public struct SpoonManifest: Decodable, Identifiable, Sendable {
         self.lifecycle       = lifecycle
         self.config          = config
         self.hotkeys         = hotkeys
+        self.activateHotkey  = activateHotkey
         self.optionalModules = optionalModules
         self.knownIssues     = knownIssues
     }
 
     private enum CodingKeys: String, CodingKey {
         case schemaVersion, name, version, description, author, homepage
-        case license, lifecycle, config, hotkeys, optionalModules
-        case knownIssues
+        case license, lifecycle, config, hotkeys, activateHotkey
+        case optionalModules, knownIssues
     }
 
     public init(from decoder: Decoder) throws {
@@ -86,7 +95,12 @@ public struct SpoonManifest: Decodable, Identifiable, Sendable {
         self.license     = try c.decodeIfPresent(String.self, forKey: .license)
         self.lifecycle   = try c.decode(Lifecycle.self, forKey: .lifecycle)
         self.config      = try c.decode([ConfigField].self, forKey: .config)
-        self.hotkeys     = try c.decode([HotkeyAction].self, forKey: .hotkeys)
+        // Spoons that moved to activateHotkey may omit `hotkeys[]`
+        // entirely. Default to [].
+        self.hotkeys     = try c.decodeIfPresent(
+            [HotkeyAction].self, forKey: .hotkeys) ?? []
+        self.activateHotkey = try c.decodeIfPresent(
+            HotkeyBinding.self, forKey: .activateHotkey)
         self.optionalModules = try c.decodeIfPresent(
             [OptionalModule].self, forKey: .optionalModules) ?? []
         self.knownIssues = try c.decodeIfPresent(
@@ -121,6 +135,26 @@ public struct HotkeyAction: Decodable, Identifiable, Sendable {
         var out: [String: HotkeyBinding] = [:]
         for a in actions {
             if let d = a.default { out[a.action] = d }
+        }
+        return out
+    }
+
+    /// Merge persisted user overrides with manifest defaults. Used by
+    /// the snippet generator and the orchestrator's live `:bindHotkeys`
+    /// step so a Spoon whose user hasn't recorded any overrides still
+    /// gets bound to the maintainer's defaults. Persisted overrides
+    /// win per-action; only missing actions fall back to the manifest.
+    /// Matches the UI's "clear = use default" semantic (a cleared
+    /// action removes itself from `state`, then re-fills here).
+    public static func resolved(
+        state:    [String: HotkeyBinding],
+        manifest actions: [HotkeyAction]
+    ) -> [String: HotkeyBinding] {
+        var out = state
+        for a in actions {
+            if out[a.action] == nil, let d = a.default {
+                out[a.action] = d
+            }
         }
         return out
     }

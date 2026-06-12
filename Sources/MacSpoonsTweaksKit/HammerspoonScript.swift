@@ -28,6 +28,17 @@ public enum HammerspoonScript {
         return "spoon.\(name):stop()"
     }
 
+    /// Update the live `mstActive` table that the activate-hotkey
+    /// callbacks use to know whether the next press is on→off or
+    /// off→on. Called after orchestrator-side start/stop so the chord
+    /// state and UI state don't diverge between Hammerspoon reloads.
+    /// Guarded against `mstActive` being nil (snippet predates the
+    /// activate-hotkey support).
+    public static func setMstActive(_ name: String, _ active: Bool) -> String {
+        let n = LuaLiteral.encodeString(name)
+        return "if mstActive then mstActive[\(n)] = \(active ? "true" : "false") end"
+    }
+
     public static func reload() -> String {
         return "hs.reload()"
     }

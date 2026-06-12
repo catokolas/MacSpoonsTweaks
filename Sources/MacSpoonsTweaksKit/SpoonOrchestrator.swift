@@ -11,6 +11,7 @@ public final class SpoonOrchestrator: @unchecked Sendable {
     public let store:       StateStore
     public let runner:      any LuaRunner
     public let snippetPath: URL
+    public let runtimeOverrides: RuntimeOverrideFile
 
     /// Closure that returns the latest in-memory catalog (name → entry).
     /// Wrapped in a closure rather than a static map because the
@@ -29,6 +30,7 @@ public final class SpoonOrchestrator: @unchecked Sendable {
         store:       StateStore,
         runner:      any LuaRunner,
         snippetPath: URL,
+        runtimeOverrides: RuntimeOverrideFile? = nil,
         catalogProvider: @escaping @Sendable () -> [String: SpoonCatalogEntry],
         reposProvider:   @escaping @Sendable () -> [String: RepoRef],
         clock:           @escaping @Sendable () -> Date = { Date() }
@@ -36,9 +38,30 @@ public final class SpoonOrchestrator: @unchecked Sendable {
         self.store           = store
         self.runner          = runner
         self.snippetPath     = snippetPath
+        // Default location lives next to `mac_spoons_tweaks.lua` so the
+        // generated snippet can hard-code the read path. Tests inject a
+        // tmp-dir variant.
+        self.runtimeOverrides = runtimeOverrides
+            ?? RuntimeOverrideFile(path: RuntimeOverrideFile.defaultPath())
         self.catalogProvider = catalogProvider
         self.reposProvider   = reposProvider
         self.clock           = clock
+    }
+
+    // MARK: - Snippet helpers
+
+    /// Regenerate `mac_spoons_tweaks.lua` from current state. Used by
+    /// the model after a chord-driven state change to keep the snippet
+    /// in lockstep with `state.json` without going through the full
+    /// `apply` pipeline.
+    public func regenerateSnippet() throws {
+        let state = try store.load()
+        let snippet = SnippetGenerator.generate(
+            state:     state,
+            catalog:   catalogProvider(),
+            repos:     reposProvider(),
+            timestamp: clock())
+        try writeSnippet(snippet)
     }
 
     // MARK: - Seed
@@ -50,12 +73,14 @@ public final class SpoonOrchestrator: @unchecked Sendable {
     public func seedState(
         for name: String
     ) -> (config: [String: ConfigValue],
-          hotkeys: [String: HotkeyBinding]) {
+          hotkeys: [String: HotkeyBinding],
+          activateHotkeyOverride: HotkeyBinding?) {
         let state = (try? store.load()) ?? AppState()
         let spoon = state.spoons[name]
         return (
             config:  spoon?.config  ?? [:],
-            hotkeys: spoon?.hotkeys ?? [:])
+            hotkeys: spoon?.hotkeys ?? [:],
+            activateHotkeyOverride: spoon?.activateHotkeyOverride)
     }
 
     // MARK: - Apply
@@ -93,7 +118,8 @@ public final class SpoonOrchestrator: @unchecked Sendable {
     public func apply(
         entry: SpoonCatalogEntry,
         values: [String: ConfigValue],
-        hotkeyOverrides: [String: HotkeyBinding]
+        hotkeyOverrides: [String: HotkeyBinding],
+        activateHotkeyOverride: HotkeyBinding? = nil
     ) async throws -> ApplyResult {
 
         // 1. Persist the new state for THIS Spoon. Preserve other
@@ -104,7 +130,8 @@ public final class SpoonOrchestrator: @unchecked Sendable {
             enabled:      true,                  // implicit enable on Apply
             installedRef: nil,                   // ←— set by SpoonInstaller
             config:       values,
-            hotkeys:      hotkeyOverrides)
+            hotkeys:      hotkeyOverrides,
+            activateHotkeyOverride: activateHotkeyOverride)
 
         do {
             try store.update { state in
@@ -146,8 +173,15 @@ public final class SpoonOrchestrator: @unchecked Sendable {
         // otherwise fails with `attempt to index nil value (field 'X')`.
         // hs.loadSpoon is idempotent so this is cheap on subsequent
         // applies.
+        // Manifest defaults bind via the resolved-hotkeys path below
+        // even if hotkeyOverrides is empty, so include them in the
+        // "we need the Spoon loaded" check.
+        let manifestHasDefaultHotkey = entry.hotkeys.contains {
+            $0.default != nil
+        }
         let hasLiveWork = !values.isEmpty
             || !hotkeyOverrides.isEmpty
+            || manifestHasDefaultHotkey
             || entry.lifecycle.hasStart
         if hasLiveWork {
             do {
@@ -182,17 +216,30 @@ public final class SpoonOrchestrator: @unchecked Sendable {
             }
         }
 
-        if !hotkeyOverrides.isEmpty {
-            do {
-                try await runner.bindHotkeys(
-                    spoon:   entry.name,
-                    mapping: hotkeyOverrides)
-            } catch {
-                liveOK    = false
-                // Concatenate so the first failure isn't masked.
-                liveError = [liveError, String(describing: error)]
-                    .compactMap { $0 }
-                    .joined(separator: " | ")
+        // Merge with manifest defaults so a Spoon without explicit
+        // user overrides still gets bound to the maintainer's defaults
+        // — matches what the snippet emits. SKIPPED when the Spoon
+        // carries an `activateHotkey`: those chords are bound by our
+        // own `hs.hotkey.bind` block in the snippet (so the snippet
+        // wiring goes live only after Hammerspoon reload picks up the
+        // new snippet). Avoiding the per-action live bind here also
+        // means we don't shadow the Spoon's other actions if the
+        // manifest still declares some.
+        if entry.activateHotkey == nil {
+            let liveHotkeys = HotkeyAction.resolved(
+                state: hotkeyOverrides, manifest: entry.hotkeys)
+            if !liveHotkeys.isEmpty {
+                do {
+                    try await runner.bindHotkeys(
+                        spoon:   entry.name,
+                        mapping: liveHotkeys)
+                } catch {
+                    liveOK    = false
+                    // Concatenate so the first failure isn't masked.
+                    liveError = [liveError, String(describing: error)]
+                        .compactMap { $0 }
+                        .joined(separator: " | ")
+                }
             }
         }
 
@@ -253,6 +300,12 @@ public final class SpoonOrchestrator: @unchecked Sendable {
             try writeSnippet(snippet)
         } catch {
             throw ApplyError.snippetWriteFailed(error)
+        }
+
+        // Drop any stale chord override — enable/disable is a UI-driven
+        // state change; chord-driven runtime state shouldn't survive it.
+        if entry.activateHotkey != nil {
+            try? runtimeOverrides.setDeactivated(entry.name, false)
         }
 
         var liveOK    = true
@@ -318,6 +371,14 @@ public final class SpoonOrchestrator: @unchecked Sendable {
             throw ApplyError.snippetWriteFailed(error)
         }
 
+        // 2b. Keep the runtime override file in sync so a chord-driven
+        // deactivation that we just superseded via UI doesn't bounce
+        // back on next hs.reload(). Only Spoons that participate in the
+        // activate-hotkey flow track here; others have no entry.
+        if entry.activateHotkey != nil {
+            try? runtimeOverrides.setDeactivated(entry.name, paused)
+        }
+
         // 3. Push live. Best-effort — failures surface in ApplyResult.
         var liveOK    = true
         var liveError: String? = nil
@@ -354,6 +415,16 @@ public final class SpoonOrchestrator: @unchecked Sendable {
                         .joined(separator: " | ")
                 }
             }
+        }
+
+        // Keep the live `mstActive` flag in sync with the new state so
+        // the next chord press from the user is consistent with the UI
+        // (no "first press just acknowledges current state" surprise).
+        // Best-effort: a missing mstActive (older snippet) is benign.
+        if entry.activateHotkey != nil {
+            _ = try? await runner.runLua(
+                HammerspoonScript.setMstActive(entry.name, !paused),
+                timeout: 5)
         }
 
         return ApplyResult(
