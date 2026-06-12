@@ -110,6 +110,20 @@ public struct HotkeyAction: Decodable, Identifiable, Sendable {
     public var `default`: HotkeyBinding?
 
     public var id: String { action }
+
+    /// Extract the manifest's authored default hotkeys as the
+    /// `[action: binding]` dictionary the orchestrator's `apply` takes.
+    /// Actions without a `default` are skipped — we won't bind a Spoon
+    /// to a key the maintainer didn't pre-pick.
+    public static func defaults(
+        from actions: [HotkeyAction]
+    ) -> [String: HotkeyBinding] {
+        var out: [String: HotkeyBinding] = [:]
+        for a in actions {
+            if let d = a.default { out[a.action] = d }
+        }
+        return out
+    }
 }
 
 public struct HotkeyBinding: Codable, Hashable, Sendable {

@@ -486,6 +486,22 @@ final class SpoonCatalogModel: ObservableObject {
             entry:        entry,
             from:         repoRef(for: entry.sourceID),
             installedRef: placeholderRef(for: entry.sourceID))
+
+        // Auto-activate so the Spoon is usable immediately: flip
+        // enabled, write the snippet, push live. Fresh installs get
+        // the manifest's default hotkeys; reinstalls preserve whatever
+        // overrides the user already set. Best-effort — a live-apply
+        // failure (no Hammerspoon running, missing permissions) does
+        // not unwind the on-disk install.
+        let seed = orchestrator.seedState(for: entry.name)
+        let hotkeys = seed.hotkeys.isEmpty
+            ? HotkeyAction.defaults(from: entry.hotkeys)
+            : seed.hotkeys
+        _ = try? await orchestrator.apply(
+            entry:           entry,
+            values:          seed.config,
+            hotkeyOverrides: hotkeys)
+
         installSeq += 1
         recomputeHotkeyConflicts()
         scanUnmanagedSpoons()

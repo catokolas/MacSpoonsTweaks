@@ -107,4 +107,45 @@ struct HotkeyTests {
         #expect(Hotkey.formatBinding(
             HotkeyBinding(mods: ["cmd"], key: "f12")) == "⌘F12")
     }
+
+    // MARK: - HotkeyAction.defaults
+
+    @Test
+    func defaultsExtractsBindingsFromActions() {
+        let actions = try! JSONDecoder().decode(
+            [HotkeyAction].self, from: Data("""
+            [
+              {"action":"toggle", "default":{"mods":["cmd"],"key":"f"}},
+              {"action":"next",   "default":{"mods":["shift","cmd"],"key":"n"}}
+            ]
+            """.utf8))
+        let defaults = HotkeyAction.defaults(from: actions)
+        #expect(defaults.count == 2)
+        #expect(defaults["toggle"] == HotkeyBinding(mods: ["cmd"], key: "f"))
+        #expect(defaults["next"]   == HotkeyBinding(
+            mods: ["shift", "cmd"], key: "n"))
+    }
+
+    @Test
+    func defaultsSkipsActionsWithoutADefault() {
+        // The install→auto-activate flow shouldn't invent bindings
+        // the maintainer didn't pick. Actions without a `default` drop
+        // out so SpoonInstall doesn't bind something unexpected.
+        let actions = try! JSONDecoder().decode(
+            [HotkeyAction].self, from: Data("""
+            [
+              {"action":"toggle", "default":{"mods":["cmd"],"key":"f"}},
+              {"action":"reset",  "label":"Reset"}
+            ]
+            """.utf8))
+        let defaults = HotkeyAction.defaults(from: actions)
+        #expect(defaults.count == 1)
+        #expect(defaults["toggle"] != nil)
+        #expect(defaults["reset"]  == nil)
+    }
+
+    @Test
+    func defaultsOnEmptyInputReturnsEmpty() {
+        #expect(HotkeyAction.defaults(from: []).isEmpty)
+    }
 }
