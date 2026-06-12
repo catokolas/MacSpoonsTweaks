@@ -21,7 +21,7 @@ struct StringListEditor: View {
                 .help("Add row")
             }
             if let desc = field.description {
-                Text(desc).font(.caption).foregroundStyle(.secondary)
+                Text(desc).scaledFont(.caption).foregroundStyle(.secondary)
             }
             ForEach(value.indices, id: \.self) { idx in
                 HStack {
@@ -46,7 +46,7 @@ struct StringListEditor: View {
             }
             if value.isEmpty {
                 Text("(empty — click + to add)")
-                    .font(.caption).foregroundStyle(.tertiary)
+                    .scaledFont(.caption).foregroundStyle(.tertiary)
             }
         }
     }

@@ -31,10 +31,10 @@ struct DiagnosticsView: View {
         HStack {
             Image(systemName: "stethoscope")
                 .foregroundStyle(.secondary)
-            Text("Diagnostics").font(.headline)
+            Text("Diagnostics").scaledFont(.headline)
             Text("(\(catalog.recentInvocations.count) of " +
                  "\(catalog.recorder.capacity) calls)")
-                .font(.caption).foregroundStyle(.secondary)
+                .scaledFont(.caption).foregroundStyle(.secondary)
             Spacer()
             Button("Clear") {
                 catalog.recorder.clear()
@@ -56,7 +56,7 @@ struct DiagnosticsView: View {
             Text("No bridge calls recorded yet.")
                 .foregroundStyle(.secondary)
             Text("Try clicking Apply on a Spoon — every `hs -c` call lands here.")
-                .font(.caption).foregroundStyle(.tertiary)
+                .scaledFont(.caption).foregroundStyle(.tertiary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal)
             Spacer()
@@ -149,7 +149,7 @@ struct DiagnosticsView: View {
     ) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
-                Text(title).font(.caption.bold())
+                Text(title).scaledFont(.caption, weight: .bold)
                     .foregroundStyle(.secondary)
                 Spacer()
                 Button {

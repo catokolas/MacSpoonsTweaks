@@ -75,6 +75,8 @@ struct SpoonDetailView: View {
             WhatsChangedSheet(entry: entry) {
                 Task { await installNow() }
             }
+            .environment(\.dynamicTypeSize,
+                         catalog.fontSize.dynamicTypeSize)
         }
     }
 
@@ -91,22 +93,22 @@ struct SpoonDetailView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(entry.name).font(.title2).fontWeight(.semibold)
+            Text(entry.name).scaledFont(.title2).fontWeight(.semibold)
             HStack(spacing: 6) {
                 Text("v\(entry.metadata.version)")
-                    .font(.subheadline).foregroundStyle(.secondary)
+                    .scaledFont(.subheadline).foregroundStyle(.secondary)
                 Text("·").foregroundStyle(.secondary)
                 Text(entry.sourceID)
-                    .font(.subheadline).foregroundStyle(.secondary)
+                    .scaledFont(.subheadline).foregroundStyle(.secondary)
                 if let homepage = entry.metadata.homepage,
                    let url = URL(string: homepage) {
                     Text("·").foregroundStyle(.secondary)
                     Link("Homepage", destination: url)
-                        .font(.subheadline)
+                        .scaledFont(.subheadline)
                 }
             }
             if let desc = entry.metadata.description {
-                Text(desc).font(.body).padding(.top, 4)
+                Text(desc).scaledFont(.body).padding(.top, 4)
             }
         }
     }
@@ -119,7 +121,7 @@ struct SpoonDetailView: View {
                 installActionButton
             }
             if let msg = installMessage, installState == .failed {
-                Text(msg).font(.caption).foregroundStyle(.red)
+                Text(msg).scaledFont(.caption).foregroundStyle(.red)
                     .lineLimit(3).textSelection(.enabled)
             }
         }
@@ -135,7 +137,7 @@ struct SpoonDetailView: View {
             Image(systemName: stateBadgeIcon)
                 .foregroundStyle(stateBadgeColor)
             Text(stateBadgeLabel)
-                .font(.subheadline)
+                .scaledFont(.subheadline)
         }
     }
 
@@ -229,20 +231,20 @@ struct SpoonDetailView: View {
             Text(provenanceLabel)
             Spacer()
         }
-        .font(.caption)
+        .scaledFont(.caption)
         .foregroundStyle(.secondary)
     }
 
     private var configSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("Configuration").font(.headline)
+                Text("Configuration").scaledFont(.headline)
                 Spacer()
             }
             driftNotice
             if entry.config.isEmpty {
                 Text("This Spoon has no documented configuration.")
-                    .font(.caption).foregroundStyle(.secondary)
+                    .scaledFont(.caption).foregroundStyle(.secondary)
             } else {
                 ConfigFormView(fields: entry.config, values: $values)
             }
@@ -258,15 +260,15 @@ struct SpoonDetailView: View {
                     Image(systemName: "info.circle.fill")
                         .foregroundStyle(.blue)
                     Text("Catalog updated since install")
-                        .font(.subheadline)
+                        .scaledFont(.subheadline)
                 }
                 if !drift.addedKeys.isEmpty {
                     Text("New: \(drift.addedKeys.joined(separator: ", "))")
-                        .font(.caption).foregroundStyle(.secondary)
+                        .scaledFont(.caption).foregroundStyle(.secondary)
                 }
                 if !drift.removedKeys.isEmpty {
                     Text("Removed: \(drift.removedKeys.joined(separator: ", "))")
-                        .font(.caption).foregroundStyle(.secondary)
+                        .scaledFont(.caption).foregroundStyle(.secondary)
                 }
             }
             .padding(.horizontal, 10)
@@ -279,7 +281,7 @@ struct SpoonDetailView: View {
 
     private var hotkeySection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Hotkeys").font(.headline)
+            Text("Hotkeys").scaledFont(.headline)
             ForEach(entry.hotkeys) { action in
                 VStack(alignment: .leading, spacing: 4) {
                     HotkeyRecorderField(
@@ -314,7 +316,7 @@ struct SpoonDetailView: View {
                     .foregroundStyle(.orange)
                     .imageScale(.small)
                 Text("Same chord as \(formatParticipants(others))")
-                    .font(.caption)
+                    .scaledFont(.caption)
                     .foregroundStyle(.orange)
             }
             .padding(.leading, 4)
@@ -394,7 +396,7 @@ struct SpoonDetailView: View {
                     .foregroundStyle(.green)
                 Text("Applied — state saved and pushed live.")
             }
-            .font(.caption).foregroundStyle(.secondary)
+            .scaledFont(.caption).foregroundStyle(.secondary)
             .frame(maxWidth: .infinity, alignment: .leading)
         case .appliedWithLiveErrors:
             VStack(alignment: .leading, spacing: 2) {
@@ -404,11 +406,11 @@ struct SpoonDetailView: View {
                     Text("Saved, but live apply failed. Reload Hammerspoon to pick up the snippet.")
                 }
                 if let msg = applyMessage {
-                    Text(msg).font(.caption2).foregroundStyle(.secondary)
+                    Text(msg).scaledFont(.caption2).foregroundStyle(.secondary)
                         .textSelection(.enabled)
                 }
             }
-            .font(.caption)
+            .scaledFont(.caption)
             .frame(maxWidth: .infinity, alignment: .leading)
         case .failed:
             HStack(spacing: 4) {
@@ -417,7 +419,7 @@ struct SpoonDetailView: View {
                 Text(applyMessage ?? "Apply failed.")
                     .textSelection(.enabled)
             }
-            .font(.caption).foregroundStyle(.red)
+            .scaledFont(.caption).foregroundStyle(.red)
             .frame(maxWidth: .infinity, alignment: .leading)
         case .idle, .inFlight:
             EmptyView()

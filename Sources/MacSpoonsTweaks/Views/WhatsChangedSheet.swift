@@ -30,16 +30,19 @@ struct WhatsChangedSheet: View {
             Divider()
             footer
         }
-        .frame(width: 620, height: 500)
+        // Flexible sizing so larger Dynamic Type presets don't clip
+        // the commit list or wrap the header into a wall of text.
+        .frame(minWidth: 620, idealWidth: 720,
+               minHeight: 500, idealHeight: 600)
         .task { await load() }
     }
 
     private var header: some View {
         HStack(alignment: .firstTextBaseline) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(entry.name).font(.title2.bold())
+                Text(entry.name).scaledFont(.title2, weight: .bold)
                 rangeText
-                    .font(.subheadline)
+                    .scaledFont(.subheadline)
                     .foregroundStyle(.secondary)
             }
             Spacer()
@@ -81,9 +84,9 @@ struct WhatsChangedSheet: View {
         case .failed(let msg):
             VStack(alignment: .leading, spacing: 10) {
                 Text("Couldn't load changes")
-                    .font(.headline).foregroundStyle(.red)
+                    .scaledFont(.headline).foregroundStyle(.red)
                 Text(msg)
-                    .font(.caption)
+                    .scaledFont(.caption)
                     .textSelection(.enabled)
                     .foregroundStyle(.secondary)
                 Button("Retry") { Task { await load() } }
@@ -100,7 +103,7 @@ struct WhatsChangedSheet: View {
                     Image(systemName: "info.circle.fill")
                         .foregroundStyle(.orange)
                     Text(note)
-                        .font(.caption)
+                        .scaledFont(.caption)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .padding(10)
@@ -133,7 +136,7 @@ struct WhatsChangedSheet: View {
         HStack {
             if case .loaded(let log) = state, let url = log.compareURL {
                 Link("View on GitHub", destination: url)
-                    .font(.callout)
+                    .scaledFont(.callout)
             }
             Spacer()
             Button("Update now") {
@@ -177,7 +180,7 @@ private struct CommitRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(commit.subject)
-                .font(.body)
+                .scaledFont(.body)
                 .fixedSize(horizontal: false, vertical: true)
             HStack(spacing: 6) {
                 Text(commit.author)
@@ -189,7 +192,7 @@ private struct CommitRow: View {
                      destination: commit.url)
                     .font(.caption.monospaced())
             }
-            .font(.caption)
+            .scaledFont(.caption)
             .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)

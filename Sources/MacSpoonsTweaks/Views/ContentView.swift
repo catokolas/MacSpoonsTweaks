@@ -34,14 +34,54 @@ struct ContentView: View {
             } detail: {
                 detail
             }
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    fontSizeToolbarGroup
+                }
+            }
         }
         .frame(minWidth: 700, minHeight: 500)
+        // Note: `.environment(\.dynamicTypeSize, …)` and `.id(…)` are
+        // applied at the App scene level (MacSpoonsTweaksApp.swift)
+        // so changing the preset replaces the whole ContentView
+        // instance and SwiftUI renders fresh with the new size.
         .task { catalog.refreshInitLuaPatchState() }
         .sheet(isPresented: $diagnosticsShown) {
+            // Sheets establish a fresh presentation context — re-inject
+            // the user's font-size preset so the sheet matches the
+            // window root.
             DiagnosticsView()
+                .environment(\.dynamicTypeSize,
+                             catalog.fontSize.dynamicTypeSize)
         }
         .sheet(isPresented: $catalogsShown) {
             ManageCatalogsView()
+                .environment(\.dynamicTypeSize,
+                             catalog.fontSize.dynamicTypeSize)
+        }
+    }
+
+    // MARK: - Toolbar
+
+    /// A− / A+ controls in the window toolbar next to the sidebar
+    /// toggle. Reads `catalog.fontSize` for the live tooltip; clicks
+    /// step through the preset ladder.
+    private var fontSizeToolbarGroup: some View {
+        HStack(spacing: 4) {
+            Button {
+                catalog.decreaseFontSize()
+            } label: {
+                Image(systemName: "textformat.size.smaller")
+            }
+            .help("Decrease font size — currently \(catalog.fontSize.label)")
+            .disabled(!catalog.canDecreaseFontSize)
+            Button {
+                catalog.increaseFontSize()
+            } label: {
+                Image(systemName: "textformat.size.larger")
+            }
+            .help("Increase font size — currently \(catalog.fontSize.label)")
+            .disabled(!catalog.canIncreaseFontSize)
         }
     }
 
@@ -59,9 +99,9 @@ struct ContentView: View {
         case .failed where catalog.entries.isEmpty:
             VStack(spacing: 8) {
                 Text("Couldn’t load catalog")
-                    .font(.headline)
+                    .scaledFont(.headline)
                 if let e = catalog.lastError {
-                    Text(e).font(.caption).foregroundStyle(.secondary)
+                    Text(e).scaledFont(.caption).foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal)
                 }
@@ -156,7 +196,7 @@ struct ContentView: View {
                 .imageScale(.small)
             Text("\(catalog.hotkeyConflicts.count) hotkey conflict" +
                  (catalog.hotkeyConflicts.count == 1 ? "" : "s"))
-                .font(.caption)
+                .scaledFont(.caption)
                 .foregroundStyle(.primary)
             Spacer()
         }
@@ -315,11 +355,11 @@ private struct UnmanagedSpoonRow: View {
                 .foregroundStyle(.secondary)
                 .imageScale(.small)
             VStack(alignment: .leading, spacing: 2) {
-                Text(spoon.name).font(.body)
+                Text(spoon.name).scaledFont(.body)
                 Text(spoon.isSymlink
                      ? "Externally managed (symlink)"
                      : "Externally managed")
-                    .font(.caption)
+                    .scaledFont(.caption)
                     .foregroundStyle(.tertiary)
                     .lineLimit(1)
             }
@@ -336,7 +376,7 @@ private struct SpoonRow: View {
         HStack(alignment: .top, spacing: 6) {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 4) {
-                    Text(entry.name).font(.body)
+                    Text(entry.name).scaledFont(.body)
                     if catalog.isInstalled(entry) {
                         Image(systemName: "checkmark.circle.fill")
                             .foregroundStyle(.green)
@@ -362,7 +402,7 @@ private struct SpoonRow: View {
                 }
                 if let desc = entry.metadata.description {
                     Text(desc)
-                        .font(.caption)
+                        .scaledFont(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
                 }

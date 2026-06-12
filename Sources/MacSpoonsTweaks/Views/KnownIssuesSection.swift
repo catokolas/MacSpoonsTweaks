@@ -15,10 +15,10 @@ struct KnownIssuesSection: View {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .foregroundStyle(.orange)
                     Text("Known issues")
-                        .font(.headline)
+                        .scaledFont(.headline)
                     Text("(\(issues.count))")
                         .foregroundStyle(.secondary)
-                        .font(.subheadline)
+                        .scaledFont(.subheadline)
                 }
                 ForEach(issues, id: \.title) { issue in
                     KnownIssueRow(issue: issue)
@@ -37,9 +37,9 @@ private struct KnownIssueRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(issue.title).font(.body.bold())
+            Text(issue.title).scaledFont(.body, weight: .bold)
             Text(issue.description)
-                .font(.caption)
+                .scaledFont(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
                 .textSelection(.enabled)

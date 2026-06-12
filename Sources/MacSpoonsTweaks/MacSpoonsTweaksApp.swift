@@ -15,12 +15,24 @@ struct MacSpoonsTweaksApp: App {
             ContentView()
                 .environmentObject(catalog)
                 .luaRunner(catalog.runner)
-                // Bump the dynamic type one notch from the macOS
-                // default .large. Propagates through every Text/Label/
-                // Button so we don't have to tweak each `.font(...)`.
-                // Going higher makes `.largeTitle` (e.g. the Spoon
-                // detail header) disproportionately large.
-                .environment(\.dynamicTypeSize, .xLarge)
+                // Apply the user's font-size preset HERE at the App
+                // scene level AND force a full ContentView rebuild on
+                // change via `.id`. On macOS, SwiftUI's
+                // `.dynamicTypeSize` environment only takes effect on
+                // first render of a view; mutating it reactively
+                // doesn't re-render already-rendered text. The `.id`
+                // tied to the preset side-steps that by replacing the
+                // ContentView instance whenever the preset changes.
+                // Custom multiplier the `.scaledFont(_:weight:)`
+                // modifier reads. Reliable across macOS versions
+                // (Dynamic Type honouring varies in 26+).
+                .environment(\.appFontScale,
+                             catalog.fontSize.sizeScale)
+                // Keep `.dynamicTypeSize` set too — it covers some
+                // system-rendered widgets (Picker labels, menu items)
+                // that don't go through `.scaledFont`.
+                .environment(\.dynamicTypeSize,
+                             catalog.fontSize.dynamicTypeSize)
                 .task { await catalog.bootstrapSpoonInstall() }
                 .task { await catalog.refreshIfNeeded() }
         }
@@ -41,7 +53,7 @@ struct MacSpoonsTweaksApp: App {
         .commands {
             CommandGroup(replacing: .appInfo) {
                 Button("About MacSpoonsTweaks") {
-                    AboutPanel.show()
+                    AboutPanel.show(fontSize: catalog.fontSize)
                 }
             }
         }
@@ -141,6 +153,13 @@ final class SpoonCatalogModel: ObservableObject {
     /// `isInstalled(_:)` re-render. SwiftUI's @Published machinery
     /// gives us the binding automatically.
     @Published private(set) var installSeq: Int = 0
+
+    /// User-selected font-size preset, hydrated from state.json on
+    /// launch and persisted on every change. The window root, all
+    /// sheets, the MenuBarExtra content, and the About panel inject
+    /// `fontSize.dynamicTypeSize` into the SwiftUI environment so
+    /// every Text/Label scales together.
+    @Published private(set) var fontSize: FontSizePreset = .xLarge
 
     /// Latest upstream `InstalledRef` per Spoon name, captured by
     /// `checkForUpdates()`. The sidebar/detail compare this against
@@ -255,11 +274,14 @@ final class SpoonCatalogModel: ObservableObject {
             }
         }
 
-        // Hydrate user catalogs from state.json so they survive a
-        // relaunch. `rebuildReposCache` keeps the orchestrator's
-        // reposProvider consistent with the user-added set.
+        // Hydrate user catalogs + the font-size preset from state.json
+        // so they survive a relaunch. `rebuildReposCache` keeps the
+        // orchestrator's reposProvider consistent with the user-added
+        // set.
         hydrateUserSourcesFromState()
         rebuildReposCache()
+        let bootState = (try? stateStore.load()) ?? AppState()
+        self.fontSize = bootState.fontSize
     }
 
     // MARK: - Custom catalogs
@@ -345,6 +367,44 @@ final class SpoonCatalogModel: ObservableObject {
     func customCatalogConfigs() -> [CustomCatalogConfig] {
         let state = (try? stateStore.load()) ?? AppState()
         return state.customCatalogs
+    }
+
+    // MARK: - Font size
+
+    /// True iff the next-larger preset is reachable.
+    var canIncreaseFontSize: Bool {
+        return FontSizePreset.allCases.last != fontSize
+    }
+
+    /// True iff a smaller preset is reachable.
+    var canDecreaseFontSize: Bool {
+        return FontSizePreset.allCases.first != fontSize
+    }
+
+    /// Step one stop larger and persist. No-op at the top of the ladder.
+    func increaseFontSize() {
+        let all = FontSizePreset.allCases
+        guard let i = all.firstIndex(of: fontSize), i + 1 < all.count
+        else { return }
+        applyFontSize(all[i + 1])
+    }
+
+    /// Step one stop smaller and persist. No-op at the bottom.
+    func decreaseFontSize() {
+        let all = FontSizePreset.allCases
+        guard let i = all.firstIndex(of: fontSize), i > 0
+        else { return }
+        applyFontSize(all[i - 1])
+    }
+
+    private func applyFontSize(_ next: FontSizePreset) {
+        // Persist first so a write failure doesn't leave the UI lying.
+        do {
+            try stateStore.update { $0.fontSize = next }
+        } catch {
+            return
+        }
+        fontSize = next
     }
 
     // MARK: - init.lua patcher

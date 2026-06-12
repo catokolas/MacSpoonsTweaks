@@ -20,7 +20,7 @@ struct ManageCatalogsView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("Catalogs").font(.title2.bold())
+                Text("Catalogs").scaledFont(.title2, weight: .bold)
                 Spacer()
                 Button("Done") { dismiss() }
                     .keyboardShortcut(.cancelAction)
@@ -35,13 +35,16 @@ struct ManageCatalogsView: View {
             footer
         }
         .padding(20)
-        .frame(width: 600, height: 560)
+        // Flexible sizing so larger Dynamic Type presets don't clip
+        // the form fields or wrap the catalog rows.
+        .frame(minWidth: 600, idealWidth: 700,
+               minHeight: 560, idealHeight: 640)
         .onAppear { userConfigs = catalog.customCatalogConfigs() }
     }
 
     private var builtInsList: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Built-in").font(.headline)
+            Text("Built-in").scaledFont(.headline)
             BuiltInRow(
                 id: "catokolas",
                 owner: "catokolas",
@@ -57,10 +60,10 @@ struct ManageCatalogsView: View {
 
     private var userList: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("User-added").font(.headline)
+            Text("User-added").scaledFont(.headline)
             if userConfigs.isEmpty {
                 Text("(none — add one below)")
-                    .font(.caption)
+                    .scaledFont(.caption)
                     .foregroundStyle(.secondary)
             } else {
                 ForEach(userConfigs, id: \.id) { cfg in
@@ -74,27 +77,30 @@ struct ManageCatalogsView: View {
 
     private var addForm: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Add a catalog").font(.headline)
+            Text("Add a catalog").scaledFont(.headline)
             HStack(alignment: .top, spacing: 6) {
                 Image(systemName: "info.circle")
                     .foregroundStyle(.secondary)
                     .imageScale(.small)
                 Text("Catalogs must be hosted on github.com. Enter the repository as `owner/repo` — the app fetches `spoons.json` from `raw.githubusercontent.com/<owner>/<repo>/<branch>/spoons.json`.")
-                    .font(.caption)
+                    .scaledFont(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
             HStack {
+                // minWidth lets the fields grow with larger Dynamic
+                // Type presets — fixed widths used to truncate the
+                // placeholder at Accessibility sizes.
                 TextField("owner", text: $newOwner)
                     .textFieldStyle(.roundedBorder)
-                    .frame(width: 130)
+                    .frame(minWidth: 130)
                 Text("/")
                 TextField("repo", text: $newRepo)
                     .textFieldStyle(.roundedBorder)
-                    .frame(width: 200)
+                    .frame(minWidth: 200)
                 TextField("branch", text: $newBranch)
                     .textFieldStyle(.roundedBorder)
-                    .frame(width: 80)
+                    .frame(minWidth: 80)
             }
             TextField("Description (optional)", text: $newDesc)
                 .textFieldStyle(.roundedBorder)
@@ -102,7 +108,7 @@ struct ManageCatalogsView: View {
                 if addInFlight { ProgressView().controlSize(.small) }
                 if let err = addError {
                     Text(err)
-                        .font(.caption)
+                        .scaledFont(.caption)
                         .foregroundStyle(.red)
                         .textSelection(.enabled)
                 }
@@ -121,7 +127,7 @@ struct ManageCatalogsView: View {
 
     private var footer: some View {
         Text("Catalogs must publish a spoons.json matching the schema. See DEVELOPERS.md → \"Compatible catalog format\".")
-            .font(.caption)
+            .scaledFont(.caption)
             .foregroundStyle(.secondary)
     }
 
@@ -158,9 +164,9 @@ private struct BuiltInRow: View {
                 .imageScale(.small)
                 .help("Built-in — can't be removed")
             VStack(alignment: .leading, spacing: 1) {
-                Text("\(owner)/\(repo)").font(.body)
+                Text("\(owner)/\(repo)").scaledFont(.body)
                 Text(description)
-                    .font(.caption)
+                    .scaledFont(.caption)
                     .foregroundStyle(.secondary)
             }
             Spacer()
@@ -182,7 +188,7 @@ private struct UserCatalogRow: View {
                 .foregroundStyle(.secondary)
                 .imageScale(.small)
             VStack(alignment: .leading, spacing: 1) {
-                Text("\(config.owner)/\(config.repo)").font(.body)
+                Text("\(config.owner)/\(config.repo)").scaledFont(.body)
                 HStack(spacing: 4) {
                     Text("branch: \(config.branch)")
                     if let desc = config.description, !desc.isEmpty {
@@ -190,7 +196,7 @@ private struct UserCatalogRow: View {
                         Text(desc)
                     }
                 }
-                .font(.caption)
+                .scaledFont(.caption)
                 .foregroundStyle(.secondary)
             }
             Spacer()

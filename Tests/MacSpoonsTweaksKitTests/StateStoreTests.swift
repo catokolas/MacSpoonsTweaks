@@ -227,6 +227,36 @@ struct StateStoreTests {
                 .installedAt == fixed)
     }
 
+    @Test
+    func legacyStateMissingFontSizeDefaultsToXLarge() throws {
+        // state.json from before the font-size feature has no key.
+        // Decoder must default to .xLarge (preserves pre-feature look).
+        let path = tmpPath()
+        try """
+        {
+          "schemaVersion": 1,
+          "lastCatalogFetch": {},
+          "catalogETags": {},
+          "spoons": {}
+        }
+        """.write(to: path, atomically: true, encoding: .utf8)
+        let state = try StateStore(path: path).load()
+        #expect(state.fontSize == .xLarge)
+    }
+
+    @Test
+    func fontSizeRoundTrips() throws {
+        let path = tmpPath()
+        let store = StateStore(path: path)
+        try store.save(AppState(fontSize: .accessibility1))
+        #expect(try store.load().fontSize == .accessibility1)
+        // Round-trip each value to catch raw-string typos.
+        for preset in FontSizePreset.allCases {
+            try store.save(AppState(fontSize: preset))
+            #expect(try store.load().fontSize == preset)
+        }
+    }
+
     // MARK: helpers
 
     private func tmpPath() -> URL {

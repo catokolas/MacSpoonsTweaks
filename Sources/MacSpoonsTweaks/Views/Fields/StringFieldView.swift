@@ -18,7 +18,7 @@ struct StringFieldView: View {
                 .frame(maxWidth: 240)
             }
             if let desc = field.description {
-                Text(desc).font(.caption).foregroundStyle(.secondary)
+                Text(desc).scaledFont(.caption).foregroundStyle(.secondary)
             }
         }
     }

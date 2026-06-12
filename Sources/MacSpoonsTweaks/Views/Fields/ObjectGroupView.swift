@@ -21,9 +21,9 @@ struct ObjectGroupView: View {
             label: {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(field.label ?? field.key)
-                        .font(.headline)
+                        .scaledFont(.headline)
                     if let desc = field.description {
-                        Text(desc).font(.caption)
+                        Text(desc).scaledFont(.caption)
                             .foregroundStyle(.secondary)
                     }
                 }

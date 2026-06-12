@@ -33,7 +33,7 @@ struct EnumPickerView: View {
                 }
             }
             if let desc = field.description {
-                Text(desc).font(.caption).foregroundStyle(.secondary)
+                Text(desc).scaledFont(.caption).foregroundStyle(.secondary)
             }
         }
     }

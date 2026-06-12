@@ -42,10 +42,10 @@ struct LuaLiteralEditor: View {
         VStack(alignment: .leading, spacing: 2) {
             Text(field.label ?? field.key)
             if let desc = field.description {
-                Text(desc).font(.caption)
+                Text(desc).scaledFont(.caption)
                     .foregroundStyle(.secondary)
             } else if let hint = field.luaHint {
-                Text(hint).font(.caption)
+                Text(hint).scaledFont(.caption)
                     .foregroundStyle(.tertiary)
             }
         }
@@ -78,13 +78,13 @@ struct LuaLiteralEditor: View {
                     .foregroundStyle(.green)
                 Text("Parses — Lua type: \(luaType)")
             }
-            .font(.caption)
+            .scaledFont(.caption)
         case .syntaxError(let message):
             HStack(alignment: .top, spacing: 6) {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .foregroundStyle(.red)
                 Text(message)
-                    .font(.caption)
+                    .scaledFont(.caption)
                     .foregroundStyle(.red)
                     .lineLimit(3)
                     .textSelection(.enabled)
@@ -94,7 +94,7 @@ struct LuaLiteralEditor: View {
                 Image(systemName: "circle.dashed")
                     .foregroundStyle(.secondary)
                 Text(message)
-                    .font(.caption)
+                    .scaledFont(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
             }

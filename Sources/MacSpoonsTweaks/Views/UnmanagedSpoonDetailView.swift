@@ -24,9 +24,9 @@ struct UnmanagedSpoonDetailView: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(spoon.name)
-                .font(.largeTitle).fontWeight(.semibold)
+                .scaledFont(.largeTitle).fontWeight(.semibold)
             Text("Externally managed Spoon")
-                .font(.subheadline).foregroundStyle(.secondary)
+                .scaledFont(.subheadline).foregroundStyle(.secondary)
         }
     }
 
@@ -40,9 +40,9 @@ struct UnmanagedSpoonDetailView: View {
                 Text(spoon.isSymlink
                      ? "Symlink in ~/.hammerspoon/Spoons"
                      : "Plain directory in ~/.hammerspoon/Spoons")
-                    .font(.subheadline)
+                    .scaledFont(.subheadline)
                 Text("Installed outside MacSpoonsTweaks — not tracked.")
-                    .font(.caption).foregroundStyle(.secondary)
+                    .scaledFont(.caption).foregroundStyle(.secondary)
             }
             Spacer()
             Button("Show in Finder") {
@@ -57,22 +57,22 @@ struct UnmanagedSpoonDetailView: View {
 
     private var metadataSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Path").font(.headline)
+            Text("Path").scaledFont(.headline)
             Text(spoon.path.path)
                 .font(.system(.body, design: .monospaced))
                 .textSelection(.enabled)
                 .foregroundStyle(.secondary)
             if let target = spoon.symlinkTarget {
-                Text("Symlink target").font(.headline).padding(.top, 6)
+                Text("Symlink target").scaledFont(.headline).padding(.top, 6)
                 Text(target.path)
                     .font(.system(.body, design: .monospaced))
                     .textSelection(.enabled)
                     .foregroundStyle(.secondary)
             }
             Divider().padding(.vertical, 6)
-            Text("Why is this here?").font(.headline)
+            Text("Why is this here?").scaledFont(.headline)
             Text(explanation)
-                .font(.body)
+                .scaledFont(.body)
                 .foregroundStyle(.secondary)
         }
     }

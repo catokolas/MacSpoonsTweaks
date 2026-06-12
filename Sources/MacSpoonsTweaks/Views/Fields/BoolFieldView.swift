@@ -9,7 +9,7 @@ struct BoolFieldView: View {
         VStack(alignment: .leading, spacing: 2) {
             Toggle(field.label ?? field.key, isOn: $value)
             if let desc = field.description {
-                Text(desc).font(.caption).foregroundStyle(.secondary)
+                Text(desc).scaledFont(.caption).foregroundStyle(.secondary)
             }
         }
     }

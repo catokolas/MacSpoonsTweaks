@@ -31,13 +31,13 @@ struct InitLuaBanner: View {
                 .imageScale(.large)
             VStack(alignment: .leading, spacing: 4) {
                 Text("init.lua needs `require(\"mac_spoons_tweaks\")`")
-                    .font(.headline)
+                    .scaledFont(.headline)
                 Text(needsPatchSubtitle(plan))
-                    .font(.caption).foregroundStyle(.secondary)
+                    .scaledFont(.caption).foregroundStyle(.secondary)
                 if plan.isSymlink {
                     Label {
                         Text("Symlink → \(plan.resolvedPath.path)")
-                            .font(.caption2)
+                            .scaledFont(.caption2)
                             .textSelection(.enabled)
                     } icon: {
                         Image(systemName: "arrow.right.square")
@@ -47,7 +47,7 @@ struct InitLuaBanner: View {
                 if plan.isInGitTree {
                     Label {
                         Text("Heads up: the target file is in a git repo.")
-                            .font(.caption2)
+                            .scaledFont(.caption2)
                     } icon: {
                         Image(systemName: "checkerboard.rectangle")
                     }
@@ -80,7 +80,7 @@ struct InitLuaBanner: View {
                 .foregroundStyle(.green)
             Text("Added `require(\"mac_spoons_tweaks\")` to init.lua. " +
                  "Reload Hammerspoon for it to take effect.")
-                .font(.subheadline)
+                .scaledFont(.subheadline)
             Spacer()
         }
         .padding(12)
@@ -93,9 +93,9 @@ struct InitLuaBanner: View {
                 .foregroundStyle(.red)
             VStack(alignment: .leading, spacing: 4) {
                 Text("Couldn't patch init.lua")
-                    .font(.headline)
+                    .scaledFont(.headline)
                 Text(message)
-                    .font(.caption).foregroundStyle(.secondary)
+                    .scaledFont(.caption).foregroundStyle(.secondary)
                     .textSelection(.enabled)
                     .lineLimit(4)
             }

@@ -15,7 +15,7 @@ struct OptionalModulesSection: View {
     var body: some View {
         if !modules.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
-                Text("Optional native modules").font(.headline)
+                Text("Optional native modules").scaledFont(.headline)
                 ForEach(modules, id: \.name) { module in
                     OptionalModuleRow(module: module)
                 }
@@ -42,25 +42,25 @@ private struct OptionalModuleRow: View {
                 actionButton(status)
             }
             Text(module.description)
-                .font(.caption)
+                .scaledFont(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             HStack(spacing: 6) {
                 Image(systemName: "link")
                     .foregroundStyle(.secondary)
-                    .font(.caption2)
+                    .scaledFont(.caption2)
                 Link(
                     "github.com/\(module.repo)",
                     destination: URL(
                         string: "https://github.com/\(module.repo)")!
-                ).font(.caption)
+                ).scaledFont(.caption)
             }
             if justInstalled {
                 relaunchBanner
             }
             if let err = lastError {
                 Text(err)
-                    .font(.caption2)
+                    .scaledFont(.caption2)
                     .foregroundStyle(.red)
                     .textSelection(.enabled)
             }
@@ -84,7 +84,7 @@ private struct OptionalModuleRow: View {
             }
         }()
         return Text(label)
-            .font(.caption)
+            .scaledFont(.caption)
             .foregroundStyle(color)
     }
 
@@ -114,11 +114,11 @@ private struct OptionalModuleRow: View {
             Image(systemName: "arrow.triangle.2.circlepath")
                 .foregroundStyle(.orange)
             Text("Quit and relaunch Hammerspoon to load the new module.")
-                .font(.caption)
+                .scaledFont(.caption)
             Spacer()
             Button("Dismiss") { justInstalled = false }
                 .buttonStyle(.plain)
-                .font(.caption2)
+                .scaledFont(.caption2)
                 .foregroundStyle(.secondary)
         }
         .padding(.vertical, 4)

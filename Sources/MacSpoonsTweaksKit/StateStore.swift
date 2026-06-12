@@ -23,13 +23,21 @@ public struct AppState: Codable, Equatable, Sendable {
     /// sidebar merge. Defaults to `[]` for older state files.
     public var customCatalogs:   [CustomCatalogConfig]
 
+    /// User-selected font-size preset. Mapped to SwiftUI's
+    /// `DynamicTypeSize` via `FontSizePreset.dynamicTypeSize` and
+    /// applied at every rendering surface so every text scales
+    /// together. Defaults to `.xLarge` (matches the pre-feature
+    /// hardcoded value) so existing installs don't regress.
+    public var fontSize:         FontSizePreset
+
     public init(
         schemaVersion: Int = 1,
         lastCatalogFetch: [String: Date] = [:],
         catalogETags:     [String: String] = [:],
         spoons:           [String: SpoonState] = [:],
         nativeModules:    [String: NativeModuleState] = [:],
-        customCatalogs:   [CustomCatalogConfig] = []
+        customCatalogs:   [CustomCatalogConfig] = [],
+        fontSize:         FontSizePreset = .xLarge
     ) {
         self.schemaVersion    = schemaVersion
         self.lastCatalogFetch = lastCatalogFetch
@@ -37,11 +45,12 @@ public struct AppState: Codable, Equatable, Sendable {
         self.spoons           = spoons
         self.nativeModules    = nativeModules
         self.customCatalogs   = customCatalogs
+        self.fontSize         = fontSize
     }
 
     private enum CodingKeys: String, CodingKey {
         case schemaVersion, lastCatalogFetch, catalogETags, spoons
-        case nativeModules, customCatalogs
+        case nativeModules, customCatalogs, fontSize
     }
 
     public init(from decoder: Decoder) throws {
@@ -57,6 +66,31 @@ public struct AppState: Codable, Equatable, Sendable {
             [String: NativeModuleState].self, forKey: .nativeModules) ?? [:]
         self.customCatalogs   = try c.decodeIfPresent(
             [CustomCatalogConfig].self, forKey: .customCatalogs) ?? []
+        self.fontSize         = try c.decodeIfPresent(
+            FontSizePreset.self, forKey: .fontSize) ?? .xLarge
+    }
+}
+
+/// Five-stop preset ladder for the user-adjustable font size in the
+/// sidebar header. Mapped to SwiftUI's `DynamicTypeSize` at the
+/// rendering surfaces; persisted as a stable raw string token so
+/// `state.json` survives renames of SwiftUI's enum.
+public enum FontSizePreset: String, Codable, CaseIterable, Equatable, Sendable {
+    case standard       = "standard"
+    case xLarge         = "xLarge"
+    case xxLarge        = "xxLarge"
+    case xxxLarge       = "xxxLarge"
+    case accessibility1 = "accessibility1"
+
+    /// Human-friendly label surfaced in the A− / A+ button tooltips.
+    public var label: String {
+        switch self {
+        case .standard:       return "Standard"
+        case .xLarge:         return "Larger"
+        case .xxLarge:        return "Even larger"
+        case .xxxLarge:       return "Largest"
+        case .accessibility1: return "Accessibility"
+        }
     }
 }
 
