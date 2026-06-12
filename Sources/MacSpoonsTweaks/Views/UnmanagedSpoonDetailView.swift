@@ -41,7 +41,7 @@ struct UnmanagedSpoonDetailView: View {
                      ? "Symlink in ~/.hammerspoon/Spoons"
                      : "Plain directory in ~/.hammerspoon/Spoons")
                     .scaledFont(.subheadline)
-                Text("Installed outside MacSpoonsTweaks — not tracked.")
+                Text("Installed outside Mac Spoons Tweaks — not tracked.")
                     .scaledFont(.caption).foregroundStyle(.secondary)
             }
             Spacer()
@@ -80,12 +80,12 @@ struct UnmanagedSpoonDetailView: View {
     private var explanation: String {
         if spoon.isSymlink {
             return "A symlink at \(spoon.path.lastPathComponent) points at a Spoon "
-                 + "you (or another tool) installed manually. MacSpoonsTweaks "
+                 + "you (or another tool) installed manually. Mac Spoons Tweaks "
                  + "won't touch it. To bring it under management, delete the symlink "
                  + "and install the same-named Spoon from the catalog above."
         } else {
             return "A regular Spoon directory the app didn't install. It will keep "
-                 + "working in Hammerspoon, but MacSpoonsTweaks doesn't know its "
+                 + "working in Hammerspoon, but Mac Spoons Tweaks doesn't know its "
                  + "config schema or origin, so the per-Spoon UI is unavailable."
         }
     }

@@ -11,7 +11,7 @@ struct MacSpoonsTweaksApp: App {
         // Single-window scene (Window, not WindowGroup) so the menu
         // bar's `openWindow(id:)` focuses the existing window instead
         // of spawning a duplicate.
-        Window("MacSpoonsTweaks", id: "main") {
+        Window("Mac Spoons Tweaks", id: "main") {
             ContentView()
                 .environmentObject(catalog)
                 .luaRunner(catalog.runner)
@@ -52,7 +52,7 @@ struct MacSpoonsTweaksApp: App {
         .menuBarExtraStyle(.menu)
         .commands {
             CommandGroup(replacing: .appInfo) {
-                Button("About MacSpoonsTweaks") {
+                Button("About Mac Spoons Tweaks") {
                     AboutPanel.show(fontSize: catalog.fontSize)
                 }
             }

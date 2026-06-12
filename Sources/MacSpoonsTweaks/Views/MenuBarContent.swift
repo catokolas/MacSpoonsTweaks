@@ -12,7 +12,7 @@ struct MenuBarContent: View {
     var body: some View {
         // Grayed-out header. `Text` doesn't render as a menu row in
         // `.menu` style — `Button(...).disabled(true)` does.
-        Button("MacSpoonsTweaks") {}
+        Button("Mac Spoons Tweaks") {}
             .disabled(true)
 
         Divider()

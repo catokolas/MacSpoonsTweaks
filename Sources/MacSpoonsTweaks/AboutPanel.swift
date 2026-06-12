@@ -28,7 +28,7 @@ enum AboutPanel {
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered,
             defer: false)
-        panel.title = "About MacSpoonsTweaks"
+        panel.title = "About Mac Spoons Tweaks"
         panel.isReleasedWhenClosed = false
         panel.contentView = NSHostingView(
             rootView: AboutContentView()
@@ -66,7 +66,7 @@ private struct AboutContentView: View {
                 .font(.system(.largeTitle, weight: .bold))
                 .foregroundStyle(.tint)
             VStack(alignment: .leading, spacing: 2) {
-                Text("MacSpoonsTweaks")
+                Text("Mac Spoons Tweaks")
                     .scaledFont(.title, weight: .bold)
                 Text("Version \(versionString)")
                     .scaledFont(.subheadline)

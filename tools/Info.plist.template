@@ -5,8 +5,8 @@
 <dict>
   <key>CFBundlePackageType</key>          <string>APPL</string>
   <key>CFBundleIdentifier</key>           <string>{{BUNDLE_ID}}</string>
-  <key>CFBundleName</key>                 <string>MacSpoonsTweaks</string>
-  <key>CFBundleDisplayName</key>          <string>MacSpoonsTweaks</string>
+  <key>CFBundleName</key>                 <string>Mac Spoons Tweaks</string>
+  <key>CFBundleDisplayName</key>          <string>Mac Spoons Tweaks</string>
   <key>CFBundleExecutable</key>           <string>MacSpoonsTweaks</string>
   <key>CFBundleShortVersionString</key>   <string>{{VERSION}}</string>
   <key>CFBundleVersion</key>              <string>{{BUILD}}</string>
