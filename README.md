@@ -38,7 +38,7 @@ it, open the Hammerspoon console and run `hs.ipc.cliInstall()` once.
 
 ## Install
 
-### Homebrew *(recommended, coming soon)*
+### Homebrew
 
 A Homebrew cask is in preparation. Once published:
 
