@@ -69,17 +69,44 @@ VERSION=0.3.0-rc1 ./tools/build-app.sh
 
 ## What the recipient does
 
-When someone you share the ad-hoc zip with double-clicks it:
+The first-launch workflow depends on macOS version. Apple removed
+the easy "right-click → Open" path in macOS Sequoia (15) and Tahoe
+(26) — those versions require an explicit allowlist click in
+System Settings.
 
-1. macOS unzips to `MacSpoonsTweaks.app`.
-2. Double-click → "Cannot be opened because it is from an
+### macOS Sonoma (14) and earlier
+
+1. Double-click → "Cannot be opened because it is from an
    unidentified developer." Close the dialog.
-3. **Right-click → Open** (or two-finger click → Open). The same
+2. **Right-click → Open** (or two-finger click → Open). The same
    dialog reappears but now with an **Open** button.
-4. Click Open. macOS remembers the trust decision; the app launches
+3. Click Open. macOS remembers the trust decision; the app launches
    normally on every subsequent double-click.
 
-That's it. Walk friends through it once; most have done it before for
+### macOS Sequoia (15) and Tahoe (26+)
+
+1. Double-click → "MacSpoonsTweaks Not Opened — Apple could not
+   verify…" Click **Done** (don't pick *Move to Trash* — it deletes
+   the app).
+2. Open **System Settings → Privacy & Security**.
+3. Scroll to the bottom: *"MacSpoonsTweaks was blocked from use…"*
+   Click **Open Anyway**, authenticate with Touch ID / password.
+4. The original dialog reopens with an **Open** button. Click it.
+5. macOS now trusts the bundle; subsequent launches just work.
+
+Faster alternative via Terminal, works on every version:
+
+```sh
+sudo xattr -dr com.apple.quarantine /Applications/MacSpoonsTweaks.app
+open /Applications/MacSpoonsTweaks.app
+```
+
+Strips the quarantine xattr macOS attaches to anything from outside
+the Mac App Store. Homebrew is supposed to strip this on
+`brew install --cask`, but recent macOS sometimes re-adds it on the
+first launch attempt.
+
+Walk friends through it once; most have done some variant of this for
 other indie Mac apps.
 
 ## Cut a release
@@ -100,6 +127,9 @@ git push origin v$VERSION
 #      build/MacSpoonsTweaks.app
 #      build/MacSpoonsTweaks-$VERSION.zip
 ./tools/build-app.sh
+
+# Make a note of the checksum - needed by Homebrew later
+shasum -a 256 build/MacSpoonsTweaks-0.1.0.zip
 
 # 4. Publish the release on GitHub and attach the zip.
 gh release create v$VERSION \
@@ -130,6 +160,128 @@ gh release create v0.3.0-rc1 \
   build/MacSpoonsTweaks-0.3.0-rc1.zip \
   --title "v0.3.0-rc1" --notes "Release candidate." --prerelease
 ```
+
+## Publish a Homebrew tap
+
+Once at least one release has landed on GitHub, a personal Homebrew
+tap makes `brew install --cask catokolas/tap/macspoonstweaks` work —
+no submission to homebrew-core required (and `homebrew-core` would
+reject this anyway: ad-hoc signed builds don't meet their notarization
+bar).
+
+### One-time setup
+
+A tap is just a public GitHub repo whose name starts with
+`homebrew-`. The bit after the prefix becomes the tap shortname.
+
+```sh
+gh repo create catokolas/homebrew-tap --public --clone \
+    --description "Homebrew tap for catokolas's macOS tools"
+cd homebrew-tap
+mkdir Casks
+```
+
+That makes the tap reachable as `catokolas/tap` (Homebrew strips the
+`homebrew-` prefix automatically).
+
+### Add the cask
+
+For each release you want available via brew, you maintain one
+`Casks/macspoonstweaks.rb` file in that tap repo. The first version:
+
+```ruby
+cask "macspoonstweaks" do
+  version "0.1.0"
+  sha256 "<paste shasum -a 256 of the release zip here>"
+
+  url "https://github.com/catokolas/MacSpoonsTweaks/releases/download/v#{version}/MacSpoonsTweaks-#{version}.zip"
+  name "MacSpoonsTweaks"
+  desc "SwiftUI companion for Hammerspoon Spoons"
+  homepage "https://github.com/catokolas/MacSpoonsTweaks"
+
+  depends_on cask: "hammerspoon"
+  depends_on macos: :sonoma
+
+  app "MacSpoonsTweaks.app"
+
+  zap trash: [
+    "~/Library/Application Support/MacSpoonsTweaks",
+    "~/Library/Caches/MacSpoonsTweaks",
+  ]
+end
+```
+
+Notes on the stanzas:
+
+- **`depends_on cask: "hammerspoon"`** — Homebrew installs Hammerspoon
+  automatically if it isn't already present.
+- **`depends_on macos: :sonoma`** — mirrors the macOS 14 floor
+  declared in `Package.swift`.
+- **`zap trash: […]`** — what `brew uninstall --zap` removes alongside
+  the `.app`. Add any extra dirs the app accumulates as features land
+  (e.g. `~/Library/Preferences/dev.local.MacSpoonsTweaks.plist` once
+  macOS writes one).
+- **No `auto_updates true`** — the app has no Sparkle, so Homebrew
+  itself is the update channel (`brew upgrade --cask macspoonstweaks`).
+
+### Bump per release
+
+Each new MacSpoonsTweaks release requires the cask's `version` and
+`sha256` to change. After running the "Cut a release" recipe above:
+
+```sh
+# In the MacSpoonsTweaks repo, right after `gh release create …`:
+NEW_SHA=$(shasum -a 256 build/MacSpoonsTweaks-$VERSION.zip | cut -d' ' -f1)
+echo "new sha: $NEW_SHA"
+
+# Then in catokolas/homebrew-tap, edit Casks/macspoonstweaks.rb:
+#   - replace `version "..."` with the new VERSION
+#   - replace `sha256 "..."` with $NEW_SHA
+# and commit + push.
+```
+
+You can automate this from the MacSpoonsTweaks release workflow with
+[`dawidd6/action-homebrew-bump-formula`](https://github.com/dawidd6/action-homebrew-bump-formula),
+which opens a PR to the tap. Not worth wiring up until release cadence
+gets boring — manual edit is ~60 seconds.
+
+### Verify the cask before users see it
+
+From any Mac:
+
+```sh
+# Pre-flight audit (catches Ruby syntax errors, missing fields, dead
+# URLs). DO NOT pass `--new` or `--strict` — they enforce
+# homebrew-cask SUBMISSION rules a personal tap with an ad-hoc signed
+# app can't satisfy:
+#   * "GitHub repository not notable enough" (needs 75+ stars)
+#   * "Signature verification failed" (needs Apple notarization)
+# Both are expected for this distribution path and don't block install.
+brew audit --cask catokolas/tap/macspoonstweaks
+
+# Real install — bundles into /Applications.
+brew install --cask catokolas/tap/macspoonstweaks
+
+# First launch: macOS may flag the unsigned bundle on Sonoma+. Tell
+# users right-click → Open. Homebrew strips com.apple.quarantine, so
+# the "App is damaged" red dialog usually doesn't appear via brew.
+
+# Cleanup test:
+brew uninstall --cask --zap macspoonstweaks
+```
+
+### Gotchas
+
+- **Ad-hoc signing**: Homebrew accepts ad-hoc signed casks, but users
+  may still get a "macOS cannot verify the developer" dialog on first
+  launch. Mention right-click → Open in the release notes.
+- **Quarantine**: `brew install --cask` removes the quarantine xattr,
+  so the worst-case "App is damaged" red dialog doesn't appear via
+  brew. Direct-download users still need the `xattr -dr` trick
+  documented under Troubleshooting below.
+- **Cask name lowercase**: the filename and the `cask "..."` token must
+  be lowercase. The display name in `name "MacSpoonsTweaks"` can stay
+  CamelCase.
 
 ## Troubleshooting
 

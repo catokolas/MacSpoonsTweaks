@@ -50,10 +50,9 @@ brew install --cask catokolas/tap/macspoonstweaks
 
 Grab `MacSpoonsTweaks-x.y.z.zip` from
 [Releases](https://github.com/catokolas/MacSpoonsTweaks/releases), unzip
-it, and drag `MacSpoonsTweaks.app` into `/Applications`.
-
-The build is ad-hoc signed, so the first launch needs **right-click →
-Open → Open**. macOS remembers after that.
+it, and drag `MacSpoonsTweaks.app` into `/Applications`. See
+[First launch](#first-launch) below — the build is ad-hoc signed, so
+Gatekeeper needs a one-time allow.
 
 ### Build from source
 
@@ -64,6 +63,44 @@ git clone https://github.com/catokolas/MacSpoonsTweaks.git
 cd MacSpoonsTweaks
 ./tools/build-app.sh
 open build/MacSpoonsTweaks.app
+```
+
+## First launch
+
+The app is ad-hoc signed (no paid Apple Developer ID), so macOS shows
+a Gatekeeper warning the first time you open it. The exact dialog
+depends on which macOS you're on — same outcome, different number of
+clicks.
+
+### macOS Sonoma (14) or earlier
+
+1. Double-click → *"Cannot be opened because it is from an
+   unidentified developer."* Close the dialog.
+2. **Right-click → Open** (or two-finger click → Open). The same
+   dialog reappears, this time with an **Open** button.
+3. Click **Open**. macOS remembers; future launches just work.
+
+### macOS Sequoia (15) and Tahoe (26+)
+
+Apple removed the right-click shortcut on these versions. You have to
+allow the app from System Settings:
+
+1. Double-click → *"MacSpoonsTweaks Not Opened — Apple could not
+   verify…"* Click **Done** (not *Move to Trash* — that deletes it).
+2. **System Settings → Privacy & Security**, scroll to the bottom:
+   *"MacSpoonsTweaks was blocked from use…"*. Click **Open Anyway**
+   and authenticate with Touch ID / password.
+3. Double-click the app again. The dialog now has an **Open**
+   button — click it. macOS remembers from then on.
+
+### Faster: one Terminal command
+
+Works on every macOS version. Strips the quarantine attribute that
+triggers the warning:
+
+```sh
+sudo xattr -dr com.apple.quarantine /Applications/MacSpoonsTweaks.app
+open /Applications/MacSpoonsTweaks.app
 ```
 
 See [DEVELOPERS.md](DEVELOPERS.md) for the full developer setup.
