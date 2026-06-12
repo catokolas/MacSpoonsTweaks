@@ -21,6 +21,7 @@ struct HotkeyRecorderField: View {
     var body: some View {
         HStack(spacing: 10) {
             Text(actionLabel)
+                .scaledFont(.body)
             Spacer()
             chip
             recordButton
@@ -39,17 +40,20 @@ struct HotkeyRecorderField: View {
         Group {
             if recording {
                 Text("Press a chord… (Esc to cancel)")
+                    .scaledFont(.body)
                     .foregroundStyle(.secondary)
             } else if let b = binding {
                 Text(Hotkey.formatBinding(b))
-                    .font(.system(.body, design: .monospaced))
+                    .scaledFont(.body, design: .monospaced)
             } else if let d = `default` {
                 Text(Hotkey.formatBinding(d))
-                    .font(.system(.body, design: .monospaced))
+                    .scaledFont(.body, design: .monospaced)
                     .foregroundStyle(.tertiary)
                     .help("Manifest default — click Record to override")
             } else {
-                Text("—").foregroundStyle(.tertiary)
+                Text("—")
+                    .scaledFont(.body)
+                    .foregroundStyle(.tertiary)
             }
         }
         .padding(.horizontal, 8)

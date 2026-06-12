@@ -29,8 +29,10 @@ extension EnvironmentValues {
 /// us bypass that and scale predictably.
 extension View {
     func scaledFont(_ style: AppFontStyle,
-                    weight: Font.Weight? = nil) -> some View {
-        modifier(ScaledFontModifier(style: style, weight: weight))
+                    weight: Font.Weight? = nil,
+                    design: Font.Design = .default) -> some View {
+        modifier(ScaledFontModifier(
+            style: style, weight: weight, design: design))
     }
 }
 
@@ -79,10 +81,12 @@ private struct ScaledFontModifier: ViewModifier {
     @Environment(\.appFontScale) private var scale: CGFloat
     let style:  AppFontStyle
     let weight: Font.Weight?
+    let design: Font.Design
 
     func body(content: Content) -> some View {
         content.font(.system(
-            size: style.baseSize * scale,
-            weight: weight ?? style.defaultWeight))
+            size:   style.baseSize * scale,
+            weight: weight ?? style.defaultWeight,
+            design: design))
     }
 }
