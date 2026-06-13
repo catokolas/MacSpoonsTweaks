@@ -966,7 +966,16 @@ final class SpoonCatalogModel: ObservableObject {
             scanUnmanagedSpoons()
             // Kick off an update check now that we know the catalog.
             // Best-effort — failures don't block the catalog loaded state.
-            Task { await checkForUpdates() }
+            // Two passes: the first triggers clone+fetch on a cold
+            // cache; parallel git operations on the same repo can race
+            // and leave some Spoons' `latestRefs` unpopulated. A second
+            // pass a few seconds later — once the cache is warm and the
+            // fetches have settled — picks up any stragglers.
+            Task {
+                await checkForUpdates()
+                try? await Task.sleep(nanoseconds: 4_000_000_000)
+                await checkForUpdates()
+            }
         } catch {
             loadState = .failed
             lastError = String(describing: error)
