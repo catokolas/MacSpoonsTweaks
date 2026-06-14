@@ -50,13 +50,19 @@ struct ModifierComboFieldView: View {
     private var chip: some View {
         Group {
             if recording {
-                Text(liveHeld.isEmpty
-                     ? "Hold modifier(s)… (Esc to cancel)"
-                     : formatMods(liveHeld))
-                    .scaledFont(.body,
-                                design: liveHeld.isEmpty
-                                        ? .default : .monospaced)
-                    .foregroundStyle(liveHeld.isEmpty ? .secondary : .primary)
+                if liveHeld.isEmpty {
+                    Text("Hold modifier(s) — release all to confirm  (Esc cancels)")
+                        .scaledFont(.body)
+                        .foregroundStyle(.secondary)
+                } else {
+                    HStack(spacing: 6) {
+                        Text(formatMods(liveHeld))
+                            .scaledFont(.body, design: .monospaced)
+                        Text("release to confirm")
+                            .scaledFont(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
             } else if !value.isEmpty {
                 Text(formatMods(value))
                     .scaledFont(.body, design: .monospaced)
