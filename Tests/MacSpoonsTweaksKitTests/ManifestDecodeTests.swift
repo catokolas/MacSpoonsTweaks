@@ -6,15 +6,16 @@ import Testing
 struct ManifestDecodeTests {
 
     @Test
-    func decodesAllSixSpoonsFromFixture() throws {
+    func decodesAllSevenSpoonsFromFixture() throws {
         let catalog = try decodeFixture()
         #expect(catalog.schemaVersion == 1)
         #expect(catalog.repo == "catokolas/HS_SpoonsContrib")
-        #expect(catalog.spoons.count == 6)
+        #expect(catalog.spoons.count == 7)
         #expect(Set(catalog.spoons.map(\.name)) == [
-            "FocusFollowsMouse", "MouseCopyPasteSelection",
-            "MouseScrollTweaks",  "MouseTrackpadTweaks",
-            "MoveSpaces",         "SpotifyPlayPause",
+            "FocusFollowsMouse",      "MouseCopyPasteSelection",
+            "MouseMoveResizeWindows", "MouseScrollTweaks",
+            "MouseTrackpadTweaks",    "MoveSpaces",
+            "SpotifyPlayPause",
         ])
     }
 
@@ -147,6 +148,30 @@ struct ManifestDecodeTests {
         #expect(ms.activateHotkey == nil)
         let actions = ms.hotkeys.map(\.action).sorted()
         #expect(actions == ["space_left", "space_right"])
+    }
+
+    @Test
+    func mouseMoveResizeWindowsDecodesModifierComboField() throws {
+        let mmrw = try spoon(named: "MouseMoveResizeWindows")
+        #expect(mmrw.activateHotkey ==
+            HotkeyBinding(mods: ["shift", "ctrl", "cmd"], key: "w"))
+        #expect(mmrw.lifecycle.hasStart)
+        #expect(mmrw.lifecycle.hasConfigure)
+
+        let modifiers = try unwrap(mmrw, key: "modifiers")
+        guard case .modifierCombo(let mc) = modifiers else {
+            Issue.record("expected .modifierCombo, got \(modifiers)")
+            return
+        }
+        #expect(mc.default == ["alt"])
+        #expect(mc.label == "Drag modifier")
+
+        let raise = try unwrap(mmrw, key: "firstRaise")
+        guard case .bool(let b) = raise else {
+            Issue.record("expected .bool for firstRaise, got \(raise)")
+            return
+        }
+        #expect(b.default == true)
     }
 
     @Test

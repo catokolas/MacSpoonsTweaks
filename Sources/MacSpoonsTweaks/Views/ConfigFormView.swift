@@ -45,6 +45,11 @@ struct ConfigFormView: View {
                 field: f,
                 value: $values.stringList(
                     forKey: f.key, default: f.default))
+        case .modifierCombo(let f):
+            ModifierComboFieldView(
+                field: f,
+                value: $values.modifierCombo(
+                    forKey: f.key, default: f.default))
         case .object(let f):
             ObjectGroupView(
                 field: f,

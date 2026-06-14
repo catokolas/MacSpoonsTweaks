@@ -50,6 +50,15 @@ extension Binding where Value == [String: ConfigValue] {
         )
     }
 
+    /// Modifier-only chord projection. Storage reuses `.stringList`, so
+    /// the snippet generator emits the same `{ "ctrl", "cmd" }` literal
+    /// it does for any other string array.
+    func modifierCombo(
+        forKey key: String, default d: [String]
+    ) -> Binding<[String]> {
+        stringList(forKey: key, default: d)
+    }
+
     /// Nested-object projection — used by `ObjectGroupView` to recurse
     /// into a child `ConfigFormView`. Always returns a non-nil dict;
     /// writes wrap it back as `.object(...)`.

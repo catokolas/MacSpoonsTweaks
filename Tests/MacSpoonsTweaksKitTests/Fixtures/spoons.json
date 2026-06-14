@@ -629,6 +629,49 @@
       "name": "SpotifyPlayPause",
       "schemaVersion": 1,
       "version": "0.1"
+    },
+    {
+      "activateHotkey": {
+        "key": "w",
+        "mods": [
+          "shift",
+          "ctrl",
+          "cmd"
+        ]
+      },
+      "author": "Cato Kolås <cato.kolas@gmail.com>",
+      "config": [
+        {
+          "default": [
+            "alt"
+          ],
+          "description": "Hold these modifiers and left-drag anywhere in a window to move it, right-drag to resize the closest edge.",
+          "key": "modifiers",
+          "label": "Drag modifier",
+          "type": "modifierCombo"
+        },
+        {
+          "default": true,
+          "description": "Focus and raise the target window at the start of each drag.",
+          "key": "firstRaise",
+          "label": "Raise window first",
+          "type": "bool"
+        }
+      ],
+      "description": "Modifier + mouse drag to move/resize the focused window from anywhere in its rect — no need to aim for the title bar or a corner.",
+      "homepage": "https://github.com/catokolas/HS_SpoonsContrib",
+      "hotkeys": [],
+      "license": "MIT",
+      "lifecycle": {
+        "eventDriven": false,
+        "hasConfigure": true,
+        "hasStart": true,
+        "hasStop": true,
+        "hasToggle": true
+      },
+      "name": "MouseMoveResizeWindows",
+      "schemaVersion": 1,
+      "version": "0.1"
     }
   ]
 }

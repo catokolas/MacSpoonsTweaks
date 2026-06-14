@@ -104,6 +104,39 @@ struct SnippetGeneratorTests {
         #expect(snippet.contains("start = true,"))
     }
 
+    // MARK: - modifierCombo encodes through the stringList path
+
+    @Test
+    func modifierComboValueEncodesAsLuaStringList() {
+        // A modifierCombo field stores its value as ConfigValue.stringList
+        // (no dedicated ConfigValue case), so the snippet generator is
+        // expected to emit `modifiers = { "ctrl", "cmd" }` with no
+        // special handling.
+        let entry = entry(
+            "MouseMoveResizeWindows",
+            hasConfigure: true, hasStart: true,
+            hotkeyActions: [])
+        var state = AppState()
+        state.spoons["MouseMoveResizeWindows"] = SpoonState(
+            sourceID: "catokolas",
+            enabled: true,
+            installedRef: .gitCommit("abc"),
+            config: [
+                "modifiers": .stringList(["ctrl", "cmd"]),
+                "firstRaise": .bool(true),
+            ])
+
+        let snippet = SnippetGenerator.generate(
+            state: state,
+            catalog: ["MouseMoveResizeWindows": entry],
+            repos: ["catokolas": catokolasRepo],
+            timestamp: fixedDate)
+
+        #expect(snippet.contains(
+            "fn = function(s) s:configure({ firstRaise = true, " +
+            "modifiers = { \"ctrl\", \"cmd\" } }) end,"))
+    }
+
     // MARK: - andUse shape: upstream (no :configure) Spoon
 
     @Test

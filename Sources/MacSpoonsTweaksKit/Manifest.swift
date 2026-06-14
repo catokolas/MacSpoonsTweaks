@@ -182,6 +182,7 @@ public enum ConfigField: Decodable, Identifiable, Sendable {
     case string(StringField)
     case enumChoice(EnumField)
     case stringList(StringListField)
+    case modifierCombo(ModifierComboField)
     case object(ObjectField)
     case luaLiteral(LuaLiteralField)
 
@@ -189,27 +190,29 @@ public enum ConfigField: Decodable, Identifiable, Sendable {
 
     public var key: String {
         switch self {
-        case .number(let f):     return f.key
-        case .int(let f):        return f.key
-        case .bool(let f):       return f.key
-        case .string(let f):     return f.key
-        case .enumChoice(let f): return f.key
-        case .stringList(let f): return f.key
-        case .object(let f):     return f.key
-        case .luaLiteral(let f): return f.key
+        case .number(let f):         return f.key
+        case .int(let f):            return f.key
+        case .bool(let f):           return f.key
+        case .string(let f):         return f.key
+        case .enumChoice(let f):     return f.key
+        case .stringList(let f):     return f.key
+        case .modifierCombo(let f):  return f.key
+        case .object(let f):         return f.key
+        case .luaLiteral(let f):     return f.key
         }
     }
 
     public var label: String? {
         switch self {
-        case .number(let f):     return f.label
-        case .int(let f):        return f.label
-        case .bool(let f):       return f.label
-        case .string(let f):     return f.label
-        case .enumChoice(let f): return f.label
-        case .stringList(let f): return f.label
-        case .object(let f):     return f.label
-        case .luaLiteral(let f): return f.label
+        case .number(let f):         return f.label
+        case .int(let f):            return f.label
+        case .bool(let f):           return f.label
+        case .string(let f):         return f.label
+        case .enumChoice(let f):     return f.label
+        case .stringList(let f):     return f.label
+        case .modifierCombo(let f):  return f.label
+        case .object(let f):         return f.label
+        case .luaLiteral(let f):     return f.label
         }
     }
 
@@ -217,14 +220,15 @@ public enum ConfigField: Decodable, Identifiable, Sendable {
         let c = try decoder.container(keyedBy: DiscriminatorKey.self)
         let type = try c.decode(String.self, forKey: .type)
         switch type {
-        case "number":     self = .number(try NumberField(from: decoder))
-        case "int":        self = .int(try IntField(from: decoder))
-        case "bool":       self = .bool(try BoolField(from: decoder))
-        case "string":     self = .string(try StringField(from: decoder))
-        case "enum":       self = .enumChoice(try EnumField(from: decoder))
-        case "stringList": self = .stringList(try StringListField(from: decoder))
-        case "object":     self = .object(try ObjectField(from: decoder))
-        case "luaLiteral": self = .luaLiteral(try LuaLiteralField(from: decoder))
+        case "number":         self = .number(try NumberField(from: decoder))
+        case "int":            self = .int(try IntField(from: decoder))
+        case "bool":           self = .bool(try BoolField(from: decoder))
+        case "string":         self = .string(try StringField(from: decoder))
+        case "enum":           self = .enumChoice(try EnumField(from: decoder))
+        case "stringList":     self = .stringList(try StringListField(from: decoder))
+        case "modifierCombo":  self = .modifierCombo(try ModifierComboField(from: decoder))
+        case "object":         self = .object(try ObjectField(from: decoder))
+        case "luaLiteral":     self = .luaLiteral(try LuaLiteralField(from: decoder))
         default:
             throw DecodingError.dataCorruptedError(
                 forKey: .type, in: c,
@@ -313,6 +317,20 @@ public struct StringListField: Decodable, Sendable {
     public var requires:        FieldRequirement?
     public var `default`:       [String]
     public var itemPlaceholder: String?
+}
+
+/// Modifier-only chord (e.g. `["alt"]`, `["ctrl", "cmd"]`) — no main key.
+/// Stored as `ConfigValue.stringList`, so it round-trips through the
+/// existing snippet generator without special-casing. The recorder view
+/// captures live modifier presses via `NSEvent.flagsChanged` and writes
+/// the active mods back in canonical display order.
+public struct ModifierComboField: Decodable, Sendable {
+    public var key:         String
+    public var label:       String?
+    public var description: String?
+    public var advanced:    Bool?
+    public var requires:    FieldRequirement?
+    public var `default`:   [String]
 }
 
 public struct ObjectField: Decodable, Sendable {
