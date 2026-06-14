@@ -40,11 +40,13 @@ it, open the Hammerspoon console and run `hs.ipc.cliInstall()` once.
 
 ### Homebrew
 
-A Homebrew cask is in preparation. Once published:
-
 ```sh
 brew install --cask catokolas/tap/macspoonstweaks
 ```
+
+The cask depends on `hammerspoon`, so Homebrew installs that
+alongside if you don't already have it. Upgrades via the usual
+`brew upgrade --cask macspoonstweaks`.
 
 ### Download the latest release
 
