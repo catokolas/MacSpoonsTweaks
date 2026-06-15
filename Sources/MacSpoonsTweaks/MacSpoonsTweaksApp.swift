@@ -253,6 +253,33 @@ final class SpoonCatalogModel: ObservableObject {
             try? orchestrator.regenerateSnippet()
         }
 
+        // Bridge-probe-and-recover. The regen above writes the snippet
+        // (with reload) when the file isn't ours yet. That covers fresh
+        // installs. The case it doesn't cover: snippet looks fine
+        // (managed-marker present, hs.ipc require there) BUT Hammerspoon
+        // hasn't loaded it -- e.g. it was launched before MST wrote the
+        // file, then never reloaded. The marker check skips regen +
+        // reload, so the bridge stays broken. Probe once on launch; if
+        // the message port isn't reachable, AppleScript-reload
+        // Hammerspoon so it picks up the snippet (and hs.ipc) sitting on
+        // disk. The probe runs detached so it doesn't block app start;
+        // first-launch users see the reload happen ~half a second in.
+        let probeRunner = runner
+        Task.detached(priority: .utility) {
+            do {
+                _ = try await probeRunner.runLua(
+                    "return 'pong'", timeout: 2)
+                // Bridge healthy — nothing to do.
+            } catch {
+                // Any failure (port closed, CLI missing, Hammerspoon
+                // not running) is treated identically: nudge
+                // Hammerspoon to reload. Reload is idempotent and
+                // silent when Hammerspoon isn't actually running, so
+                // false positives don't bother the user.
+                HammerspoonReloader.appleScript()
+            }
+        }
+
         // The installer drives SpoonInstall via the same runner the
         // orchestrator uses; bootstraps SpoonInstall.spoon on demand.
         let bootstrap = SpoonInstallBootstrap(status: status)
