@@ -26,6 +26,14 @@ public final class SpoonOrchestrator: @unchecked Sendable {
     /// inject a fixed value for stable diffs.
     public let clock: @Sendable () -> Date
 
+    /// Action invoked after every snippet write. Production wires this
+    /// to `HammerspoonReloader.appleScript` so each write triggers a
+    /// `hs.reload()` via AppleScript — fixing the chicken-and-egg
+    /// where Hammerspoon hasn't picked up the new `require("hs.ipc")`
+    /// from the snippet and the bridge can't reach the message port.
+    /// Tests default to the no-op so they don't fork osascript.
+    public let reloader: HammerspoonReloader.Reload
+
     public init(
         store:       StateStore,
         runner:      any LuaRunner,
@@ -33,7 +41,9 @@ public final class SpoonOrchestrator: @unchecked Sendable {
         runtimeOverrides: RuntimeOverrideFile? = nil,
         catalogProvider: @escaping @Sendable () -> [String: SpoonCatalogEntry],
         reposProvider:   @escaping @Sendable () -> [String: RepoRef],
-        clock:           @escaping @Sendable () -> Date = { Date() }
+        clock:           @escaping @Sendable () -> Date = { Date() },
+        reloader:        @escaping HammerspoonReloader.Reload
+                            = HammerspoonReloader.noOp
     ) {
         self.store           = store
         self.runner          = runner
@@ -46,6 +56,7 @@ public final class SpoonOrchestrator: @unchecked Sendable {
         self.catalogProvider = catalogProvider
         self.reposProvider   = reposProvider
         self.clock           = clock
+        self.reloader        = reloader
     }
 
     // MARK: - Snippet helpers
@@ -440,5 +451,11 @@ public final class SpoonOrchestrator: @unchecked Sendable {
             at: snippetPath.deletingLastPathComponent(),
             withIntermediateDirectories: true)
         try snippet.write(to: snippetPath, atomically: true, encoding: .utf8)
+        // Tell Hammerspoon to reload via AppleScript — works even when
+        // hs.ipc isn't loaded yet, so the first write after a fresh
+        // install ends with Hammerspoon picking up the new snippet
+        // (which requires hs.ipc) without the user having to reload by
+        // hand.
+        reloader()
     }
 }

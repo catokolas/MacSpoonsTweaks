@@ -233,7 +233,25 @@ final class SpoonCatalogModel: ObservableObject {
             runner:          runner,
             snippetPath:     snippetPath,
             catalogProvider: entriesByName,
-            reposProvider:   reposByID)
+            reposProvider:   reposByID,
+            reloader:        HammerspoonReloader.appleScript)
+
+        // Adopt the managed snippet on launch if it isn't already in
+        // place. Catches two common fresh-install states:
+        //   * No file at all — `require("mac_spoons_tweaks")` in
+        //     init.lua errors out, hs.ipc never loads, bridge can't
+        //     reach the message port.
+        //   * A placeholder someone else wrote (e.g. `return { }`)
+        //     that doesn't carry our managed-marker comment.
+        // In both cases we write the empty-state snippet (which itself
+        // requires hs.ipc) and the orchestrator's reloader nudges
+        // Hammerspoon to pick it up. Cheap no-op when the file is
+        // already ours.
+        let existingSnippet =
+            (try? String(contentsOf: snippetPath, encoding: .utf8)) ?? ""
+        if !existingSnippet.contains(SnippetGenerator.managedMarker) {
+            try? orchestrator.regenerateSnippet()
+        }
 
         // The installer drives SpoonInstall via the same runner the
         // orchestrator uses; bootstraps SpoonInstall.spoon on demand.
@@ -488,6 +506,15 @@ final class SpoonCatalogModel: ObservableObject {
         guard case .needsPatch(let plan) = initLuaPatchState else { return }
         do {
             _ = try initLuaPatcher.apply(plan)
+            // Write the managed snippet immediately too. Without this,
+            // init.lua's fresh `require("mac_spoons_tweaks")` line
+            // points at a non-existent file → require fails →
+            // `hs.ipc` never loads → the bridge can't reach the
+            // message port on every subsequent Install/Apply.
+            // regenerateSnippet's writeSnippet also triggers the
+            // AppleScript reload, so Hammerspoon picks up both edits
+            // without the user reaching for the menu bar.
+            try? orchestrator.regenerateSnippet()
             initLuaPatchState = .justApplied
             // Auto-fade the success banner after a few seconds.
             try? await Task.sleep(nanoseconds: 4_000_000_000)
