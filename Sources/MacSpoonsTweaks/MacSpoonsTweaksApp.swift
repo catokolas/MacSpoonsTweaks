@@ -616,13 +616,20 @@ final class SpoonCatalogModel: ObservableObject {
             values:          seed.config,
             hotkeyOverrides: seed.hotkeys)
 
+        // Refine the placeholder with the actual upstream ref BEFORE
+        // bumping `installSeq`. Otherwise the detail row briefly flashes
+        // "Update available" + Update/View changes buttons between the
+        // installer recording the placeholder ref (`gitCommit("installed")`)
+        // and the deferred refine landing — `updateAvailable(for:)` would
+        // observe placeholder != latestRefs[entry.name] for one redraw
+        // tick. Best-effort: if the network is unavailable, refine returns
+        // early without writing the real ref and the placeholder stays;
+        // the next periodic update check will reconcile.
+        await refineInstalledRef(for: entry)
+
         installSeq += 1
         recomputeHotkeyConflicts()
         scanUnmanagedSpoons()
-        // Refine the placeholder with the actual upstream ref so the
-        // first update check after install doesn't flap to "update
-        // available" because of the placeholder.
-        Task { await refineInstalledRef(for: entry) }
     }
 
     func remove(_ entry: SpoonCatalogEntry) async throws {
