@@ -44,6 +44,17 @@ it, open the Hammerspoon console and run `hs.ipc.cliInstall()` once.
 brew install --cask catokolas/tap/macspoonstweaks
 ```
 
+If Homebrew refuses with *"unavailable"* or *"untrusted tap"* (when
+`HOMEBREW_REQUIRE_TAP_TRUST` is set), trust the tap once, then install:
+
+```sh
+brew trust catokolas/tap
+brew install --cask catokolas/tap/macspoonstweaks
+```
+
+Trust is per-machine (stored in `~/.homebrew/trust.json`), so each new
+Mac needs it once. It covers every cask in the tap.
+
 The cask depends on `hammerspoon`, so Homebrew installs that
 alongside if you don't already have it. Upgrades via the usual
 `brew upgrade --cask macspoonstweaks`.
